@@ -54,6 +54,10 @@ Individual formats per plugin are available as targets, e.g.
 By default (`COPY_PLUGIN_AFTER_BUILD=ON`) each built format is installed into the
 system plugin folders. CI and packaging builds pass `-DCOPY_PLUGIN_AFTER_BUILD=OFF`.
 
+The release pipeline — CI, PACE cloud AAX signing, notarized suite installer —
+is documented in [docs/RELEASING.md](docs/RELEASING.md). Agent/contributor
+build rules live in [AGENTS.md](AGENTS.md).
+
 ### A note on AAX / Pro Tools
 
 JUCE 8 bundles the AAX SDK, so the AAX targets build out of the box. Retail Pro Tools

@@ -21,7 +21,10 @@ set(AAX_SIGN_ID "Developer ID Application: Mark Daunt (74N92K2DPP)"
 # juce_add_plugin. No-op unless the AAX target exists and wraptool is
 # present on this machine.
 function(datacogs_sign_aax plugin_target)
-    if(APPLE AND SIGN_AAX_AFTER_BUILD
+    # Tied to COPY_PLUGIN_AFTER_BUILD: this signs the bundle the copy step
+    # just installed. No-install builds (CI) sign during packaging instead
+    # (packaging/build-installer.sh --sign-aax).
+    if(APPLE AND SIGN_AAX_AFTER_BUILD AND COPY_PLUGIN_AFTER_BUILD
        AND TARGET ${plugin_target}_AAX AND EXISTS "${AAX_WRAPTOOL}")
         add_custom_command(TARGET ${plugin_target}_AAX POST_BUILD
             COMMAND "${AAX_WRAPTOOL}" sign

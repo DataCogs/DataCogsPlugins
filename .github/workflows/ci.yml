@@ -13,6 +13,11 @@ on:
     branches: [main]
     paths-ignore: ["**.md", "docs/**"]
 
+# A newer push to the same ref supersedes any in-flight run.
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: ${{ !startsWith(github.ref, 'refs/tags/') }}
+
 env:
   BUILD_TYPE: Release
   BUILD_DIR: build
@@ -21,8 +26,9 @@ jobs:
   build_and_test:
     name: ${{ matrix.artifact }}
     runs-on: ${{ matrix.os }}
+    timeout-minutes: 90
     strategy:
-      fail-fast: false # show all errors for each platform (vs. cancel jobs on error)
+      fail-fast: true # abort the whole run as soon as any platform fails
       matrix:
         include:
           - os: windows-latest
@@ -35,11 +41,14 @@ jobs:
         uses: lukka/get-cmake@latest
 
       - name: Checkout code
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
 
       - name: ccache
         if: runner.os != 'Windows'
-        uses: hendrikmuhs/ccache-action@v1
+        uses: hendrikmuhs/ccache-action@v1.2.23
+        env:
+          # runner images ship untrusted third-party taps; silence the noise
+          HOMEBREW_NO_REQUIRE_TAP_TRUST: "1"
         with:
           key: ${{ matrix.os }}
 
@@ -72,7 +81,7 @@ jobs:
           done
 
       - name: Upload artifacts
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: DataCogsPlugins-${{ matrix.artifact }}
           path: dist/*.zip
@@ -101,10 +110,10 @@ jobs:
 
     steps:
       - name: Checkout code
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
 
       - name: Download macOS build artifacts
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@v8
         with:
           name: DataCogsPlugins-macOS
           path: zips
@@ -161,24 +170,32 @@ jobs:
           done
 
       - name: Fetch IR library
-        uses: google-github-actions/auth@v2
+        uses: google-github-actions/auth@v3
         with:
           credentials_json: ${{ secrets.GCP_SA_KEY }}
-      - uses: google-github-actions/setup-gcloud@v2
+      - uses: google-github-actions/setup-gcloud@v3
       - shell: bash
         run: |
           mkdir -p ir-library
           gcloud storage rsync --recursive gs://datacogs-ir-library/ir-library ir-library
 
-      - name: Build installer
+      - name: Sign AAX (PACE cloud) and build installer
         env:
           APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
+          PACE_ACCOUNT: ${{ secrets.PACE_ACCOUNT }}
+          PACE_PASSWORD: ${{ secrets.PACE_PASSWORD }}
+          PACE_WCGUID: ${{ secrets.PACE_WCGUID }}
         run: |
           set -euo pipefail
+          # --sign-aax wraptool-signs the staged bundles; PACE_PASSWORD in the
+          # environment opens the iLok Cloud session headlessly. The same
+          # script signs from a local USB iLok when run on a dev machine.
           ./packaging/build-installer.sh \
             --build-dir build \
             --ir-library ir-library \
             --version "${GITHUB_REF_NAME#v}" \
+            --sign-aax \
+            --aax-signid "Developer ID Application: Mark Daunt (${APPLE_TEAM_ID})" \
             --sign "Developer ID Installer: Mark Daunt (${APPLE_TEAM_ID})"
 
       - name: Notarize and staple
@@ -194,7 +211,7 @@ jobs:
           xcrun stapler staple "${PKG[0]}"
 
       - name: Upload installer
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: DataCogsPlugins-Installer-macOS
           path: dist/*.pkg
@@ -208,13 +225,13 @@ jobs:
 
     steps:
       - name: Download all artifacts
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@v8
         with:
           merge-multiple: true
           path: dist
 
       - name: Create release
-        uses: softprops/action-gh-release@v2
+        uses: softprops/action-gh-release@v3
         with:
           name: DataCogs Plugins ${{ github.ref_name }}
           draft: true
