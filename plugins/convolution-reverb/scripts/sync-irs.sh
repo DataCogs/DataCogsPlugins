@@ -18,5 +18,6 @@ if [[ "${1:-}" == "--delete" ]]; then
 fi
 
 echo "Syncing IR library: $SRC -> $BUCKET"
-gcloud storage rsync --recursive "${EXTRA[@]}" "$SRC" "$BUCKET"
+# (bash 3.2 on macOS: an empty array counts as unbound under set -u)
+gcloud storage rsync --recursive ${EXTRA[@]+"${EXTRA[@]}"} "$SRC" "$BUCKET"
 echo "Done."

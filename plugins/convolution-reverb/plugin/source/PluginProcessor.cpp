@@ -166,11 +166,16 @@ ConvolutionReverbAudioProcessor::getFactoryPresets()
     // name              mix   pre   size  decay early tail  width lowCut highCut  out  rev  IR (library-relative)
     static const std::vector<Preset> presets = {
         { "Default",        30,    0,  100,  100,    0,    0,  100,    20,  20000,   0, false, "" },
-        { "Vocal Hall",     22,   30,  100,   75,    0,    0,  100,   150,   8000,   0, false, "OpenAIR/Usina del Arte Symphony Hall.wav" },
+        { "Vocal Hall",     22,   30,  100,   75,    0,    0,  100,   150,   8000,   0, false, "Voxengo IMreverbs/Scala Milan Opera Hall.wav" },
         { "Tight Chamber",  16,   10,   65,   60,    0,   -3,  110,   120,  10000,   0, false, "OpenAIR/St Patricks Church Patrington.wav" },
-        { "Drum Room",      14,    0,   70,   50,    0,   -6,  140,    80,  12000,   0, false, "OpenAIR/Elveden Hall Marble Hall.wav" },
+        { "Drum Room",      14,    0,   70,   50,    0,   -6,  140,    80,  12000,   0, false, "Voxengo IMreverbs/Nice Drum Room.wav" },
         { "Cathedral",      30,   20,  100,  100,    0,    0,  100,   100,  20000,   0, false, "OpenAIR/York Minster.wav" },
+        { "Golden Hall",    25,   20,  100,   95,    0,    0,  100,   100,  12000,   0, false, "Voxengo IMreverbs/Musikvereinsaal.wav" },
+        { "Parking Garage", 20,    0,   90,   80,    0,    0,  120,    60,   9000,   0, false, "Voxengo IMreverbs/Parking Garage.wav" },
+        { "The Silo",       25,   10,  110,   90,    0,    0,  100,   120,   8000,   0, false, "Voxengo IMreverbs/In The Silo.wav" },
+        { "Prehistoric Cave", 28,  15,   85,   85,    0,    0,  100,    80,   7000,   0, false, "Voxengo IMreverbs/Small Prehistoric Cave.wav" },
         { "Huge Ambience",  35,   40,  130,  120,  -60,    0,  150,   150,   6000,   0, false, "OpenAIR/Hamilton Mausoleum.wav" },
+        { "Deep Space",     40,   40,  130,  120,  -60,    0,  150,   150,   6000,   0, false, "Voxengo IMreverbs/Deep Space.wav" },
         { "Reverse Swell",  45,  100,  100,  100,    0,    0,  100,    20,  20000,   0, true,  "" },
     };
     return presets;
