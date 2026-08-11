@@ -1,0 +1,21 @@
+# CMake build trees
+build/
+Builds/
+
+# Installer output and generated artwork manifests
+dist/
+plugins/convolution-reverb/scripts/prompts.json
+
+# CPM-managed dependencies (downloaded at configure time)
+libs/
+
+# Local assistant context - not part of the public repo (for now)
+CLAUDE.md
+
+# macOS
+.DS_Store
+
+# IDE
+.vscode/
+.idea/
+compile_commands.json

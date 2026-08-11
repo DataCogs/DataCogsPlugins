@@ -1,0 +1,223 @@
+name: CI
+
+# The whole suite builds on every PR and every merge to main. This is
+# deliberate (rather than per-plugin path filtering): the plugins share
+# common/ and one JUCE checkout, so a change there must prove all three
+# plugins still build and pass their tests. Docs-only changes are skipped.
+on:
+  push:
+    branches: [main]
+    tags: ["v*"]
+    paths-ignore: ["**.md", "docs/**"]
+  pull_request:
+    branches: [main]
+    paths-ignore: ["**.md", "docs/**"]
+
+env:
+  BUILD_TYPE: Release
+  BUILD_DIR: build
+
+jobs:
+  build_and_test:
+    name: ${{ matrix.artifact }}
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false # show all errors for each platform (vs. cancel jobs on error)
+      matrix:
+        include:
+          - os: windows-latest
+            artifact: Windows
+          - os: macos-latest
+            artifact: macOS
+
+    steps:
+      - name: Get latest CMake
+        uses: lukka/get-cmake@latest
+
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: ccache
+        if: runner.os != 'Windows'
+        uses: hendrikmuhs/ccache-action@v1
+        with:
+          key: ${{ matrix.os }}
+
+      - name: Configure
+        shell: bash
+        run: >
+          cmake -S . -B ${{ env.BUILD_DIR }}
+          -DCMAKE_BUILD_TYPE=${{ env.BUILD_TYPE }}
+          -DCOPY_PLUGIN_AFTER_BUILD=OFF
+          -DCMAKE_C_COMPILER_LAUNCHER=ccache -DCMAKE_CXX_COMPILER_LAUNCHER=ccache
+          -DCMAKE_OSX_ARCHITECTURES="arm64;x86_64"
+
+      - name: Build
+        shell: bash
+        run: cmake --build ${{ env.BUILD_DIR }} --config ${{ env.BUILD_TYPE }} --parallel 4
+
+      - name: Test
+        working-directory: ${{ env.BUILD_DIR }}
+        run: ctest -C ${{ env.BUILD_TYPE }} --output-on-failure
+
+      - name: Zip plugin artefacts
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p dist
+          for entry in compressor:CompressorPlugin parametric-eq:ParametricEQPlugin convolution-reverb:ConvolutionReverbPlugin; do
+            dir="${entry%%:*}"; target="${entry##*:}"
+            (cd "${BUILD_DIR}/plugins/${dir}/plugin" && \
+             cmake -E tar cf "${GITHUB_WORKSPACE}/dist/${target}-${{ matrix.artifact }}.zip" --format=zip "${target}_artefacts")
+          done
+
+      - name: Upload artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: DataCogsPlugins-${{ matrix.artifact }}
+          path: dist/*.zip
+
+  # Tagged releases (vX.Y.Z): sign, package, notarize, publish - hands-free.
+  #
+  # Required repository secrets:
+  #   PACE_TOOLS_URL          private URL of the PACE Eden tools installer
+  #                           (wraptool); download it from your PACE account
+  #                           and host it somewhere the runner can fetch
+  #   PACE_ACCOUNT            PACE Central account (cloud signing trial)
+  #   PACE_PASSWORD           its password (opens the iLok Cloud session)
+  #   PACE_WCGUID             wrap config GUID (product: Data Cogs Plugins)
+  #   APPLE_CERT_P12_BASE64   Developer ID Application + Installer certs,
+  #                           exported as one .p12, base64-encoded
+  #   APPLE_CERT_PASSWORD     the .p12 password
+  #   APPLE_TEAM_ID           e.g. 74N92K2DPP
+  #   APPLE_NOTARY_APPLE_ID   Apple ID for notarytool
+  #   APPLE_NOTARY_PASSWORD   app-specific password for notarytool
+  #   GCP_SA_KEY              service-account JSON with read access to the
+  #                           private IR library bucket
+  package_macos:
+    if: startsWith(github.ref, 'refs/tags/v')
+    runs-on: macos-latest
+    needs: build_and_test
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Download macOS build artifacts
+        uses: actions/download-artifact@v4
+        with:
+          name: DataCogsPlugins-macOS
+          path: zips
+
+      - name: Reconstruct build layout
+        shell: bash
+        run: |
+          set -euo pipefail
+          for entry in compressor:CompressorPlugin parametric-eq:ParametricEQPlugin convolution-reverb:ConvolutionReverbPlugin; do
+            dir="${entry%%:*}"; target="${entry##*:}"
+            mkdir -p "build/plugins/${dir}/plugin"
+            (cd "build/plugins/${dir}/plugin" && unzip -q "${GITHUB_WORKSPACE}/zips/${target}-macOS.zip")
+          done
+
+      - name: Import Apple signing certificates
+        env:
+          P12_BASE64: ${{ secrets.APPLE_CERT_P12_BASE64 }}
+          P12_PASSWORD: ${{ secrets.APPLE_CERT_PASSWORD }}
+        run: |
+          set -euo pipefail
+          KEYCHAIN=build.keychain
+          KEYCHAIN_PASSWORD=$(uuidgen)
+          echo "$P12_BASE64" | base64 --decode > certs.p12
+          security create-keychain -p "$KEYCHAIN_PASSWORD" "$KEYCHAIN"
+          security default-keychain -s "$KEYCHAIN"
+          security unlock-keychain -p "$KEYCHAIN_PASSWORD" "$KEYCHAIN"
+          security import certs.p12 -k "$KEYCHAIN" -P "$P12_PASSWORD" \
+            -T /usr/bin/codesign -T /usr/bin/productbuild
+          security set-key-partition-list -S apple-tool:,apple: \
+            -s -k "$KEYCHAIN_PASSWORD" "$KEYCHAIN" > /dev/null
+          rm certs.p12
+
+      - name: Install PACE Eden tools
+        run: |
+          set -euo pipefail
+          curl -fsSL -o pace-tools.pkg "${{ secrets.PACE_TOOLS_URL }}"
+          sudo installer -pkg pace-tools.pkg -target /
+
+      - name: PACE cloud-sign AAX bundles
+        env:
+          PACE_ACCOUNT: ${{ secrets.PACE_ACCOUNT }}
+          PACE_PASSWORD: ${{ secrets.PACE_PASSWORD }}
+          PACE_WCGUID: ${{ secrets.PACE_WCGUID }}
+          APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
+        run: |
+          set -euo pipefail
+          WRAPTOOL="/Applications/PACEAntiPiracy/Eden/Fusion/Versions/6/bin/wraptool"
+          SIGN_ID="Developer ID Application: Mark Daunt (${APPLE_TEAM_ID})"
+          for aax in build/plugins/*/plugin/*_artefacts/AAX/*.aaxplugin; do
+            echo "signing: $aax"
+            "$WRAPTOOL" sign --account "$PACE_ACCOUNT" --password "$PACE_PASSWORD" \
+                        --wcguid "$PACE_WCGUID" --signid "$SIGN_ID" \
+                        --in "$aax" --out "$aax"
+          done
+
+      - name: Fetch IR library
+        uses: google-github-actions/auth@v2
+        with:
+          credentials_json: ${{ secrets.GCP_SA_KEY }}
+      - uses: google-github-actions/setup-gcloud@v2
+      - shell: bash
+        run: |
+          mkdir -p ir-library
+          gcloud storage rsync --recursive gs://datacogs-ir-library/ir-library ir-library
+
+      - name: Build installer
+        env:
+          APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
+        run: |
+          set -euo pipefail
+          ./packaging/build-installer.sh \
+            --build-dir build \
+            --ir-library ir-library \
+            --version "${GITHUB_REF_NAME#v}" \
+            --sign "Developer ID Installer: Mark Daunt (${APPLE_TEAM_ID})"
+
+      - name: Notarize and staple
+        env:
+          APPLE_ID: ${{ secrets.APPLE_NOTARY_APPLE_ID }}
+          APP_PASSWORD: ${{ secrets.APPLE_NOTARY_PASSWORD }}
+          TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
+        run: |
+          set -euo pipefail
+          PKG=(dist/*.pkg)
+          xcrun notarytool submit "${PKG[0]}" --wait \
+            --apple-id "$APPLE_ID" --password "$APP_PASSWORD" --team-id "$TEAM_ID"
+          xcrun stapler staple "${PKG[0]}"
+
+      - name: Upload installer
+        uses: actions/upload-artifact@v4
+        with:
+          name: DataCogsPlugins-Installer-macOS
+          path: dist/*.pkg
+
+  release:
+    if: startsWith(github.ref, 'refs/tags/v')
+    runs-on: ubuntu-latest
+    needs: [build_and_test, package_macos]
+    permissions:
+      contents: write
+
+    steps:
+      - name: Download all artifacts
+        uses: actions/download-artifact@v4
+        with:
+          merge-multiple: true
+          path: dist
+
+      - name: Create release
+        uses: softprops/action-gh-release@v2
+        with:
+          name: DataCogs Plugins ${{ github.ref_name }}
+          draft: true
+          files: |
+            dist/*.pkg
+            dist/*.zip
