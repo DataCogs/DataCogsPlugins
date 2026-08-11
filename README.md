@@ -64,6 +64,48 @@ JUCE 8 bundles the AAX SDK, so the AAX targets build out of the box. Retail Pro 
 only loads PACE-signed AAX, which requires an Avid/PACE developer setup; unsigned local
 builds load in Pro Tools Developer builds only.
 
+## PACE cloud signing: best practices
+
+This repo signs AAX in CI with **PACE cloud signing** — no physical iLok on the
+runner — following PACE's guide *"Code Signing of AAX plug-ins utilizing the iLok
+Cloud without use of a physical iLok USB key for continuous integration (CI)
+environments"* (available from [PACE support](mailto:support@paceap.com); see also
+PACE's [wraptool reference](https://docs.paceap.com/fusion-protection/reference/wraptool/overview)
+and [SDK installation docs](https://docs.paceap.com/fusion-protection/getting-started/shared/installation)
+covering silent installs for CI).
+
+The flow, as implemented in [`packaging/build-installer.sh`](packaging/build-installer.sh)
+and [`.github/workflows/ci.yml`](.github/workflows/ci.yml):
+
+1. Install two packages on the runner: the **PACE Code Signing for AAX SDK**
+   (provides `wraptool`) and the **iLok License Support** installer (provides
+   `iloktool`).
+2. Open the cloud session headlessly: `iloktool cloud --open --account … --password …`
+3. Sign with `wraptool sign … --allowsigningservice`
+4. **Close the session on exit** (`iloktool cloud --close`), success or failure —
+   sessions otherwise stay open indefinitely.
+
+Lessons worth copying:
+
+- **Use a dedicated iLok account for CI.** An iLok Cloud session is per-machine and
+  cannot be shared: if CI signs with your personal account, it will fight your
+  development machine's session. A CI-only account (holding just the PACE Tools
+  license) also limits what a leaked credential exposes — ask PACE to deposit the
+  license to a separate account for CI.
+- **Keep credentials out of argv where you control it.** The account password
+  travels only via environment variables into the scripts; secrets are exposed
+  solely to the tag-triggered release job, and GitHub never provides secrets to
+  fork PRs.
+- **Sign on the matching OS.** Mac AAX must be signed on a Mac, Windows AAX on
+  Windows — hence a macOS packaging job (a Windows one lands with the Windows
+  installer).
+- **Keep a non-cloud fallback.** The same script signs from a physical USB iLok
+  (or a locally opened cloud session) with zero flags changed — releases don't
+  stop if cloud access lapses.
+- **Support both dev and CI in one recipe.** Local builds sign the installed
+  bundle post-build (`common/cmake/DataCogsAAX.cmake`); CI signs during packaging
+  (`--sign-aax`). One wrap-config GUID covers the whole suite.
+
 ## Contributing
 
 Issues and pull requests are welcome — bug reports, DSP improvements, listening-test

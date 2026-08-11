@@ -13,9 +13,13 @@
 # AAX signing - two supported modes:
 #   --sign-aax     wraptool-signs the staged AAX bundles right here. Works
 #                  with a USB iLok plugged in or an open iLok Cloud session
-#                  as-is; for headless CI, export PACE_PASSWORD (cloud
-#                  signing) and the session is opened non-interactively.
-#                  Password comes ONLY from the environment, never argv.
+#                  as-is. For headless CI (PACE cloud signing), export
+#                  PACE_PASSWORD: the script opens an iLok Cloud session via
+#                  iloktool and signs with --allowsigningservice, per PACE's
+#                  "Code Signing of AAX plug-ins utilizing the iLok Cloud"
+#                  guide. Password comes ONLY from the environment, never
+#                  argv. Note: one cloud session per machine - concurrent
+#                  signers need separate iLok accounts.
 #   (without it)   prefers the already-signed AAX installed in the Avid
 #                  folder by a local dev build, and warns if it has to fall
 #                  back to the unsigned build-tree copy.
@@ -57,7 +61,14 @@ while [[ $# -gt 0 ]]; do
 done
 
 STAGE=$(mktemp -d)
-trap 'rm -rf "$STAGE"' EXIT
+CLOUD_SESSION=0
+cleanup() {
+  if [[ $CLOUD_SESSION -eq 1 ]]; then
+    iloktool cloud --close > /dev/null 2>&1 || true
+  fi
+  rm -rf "$STAGE"
+}
+trap cleanup EXIT
 mkdir -p "$OUT"
 
 # ---- component 1: the plugins ----------------------------------------------
@@ -102,13 +113,21 @@ done
 # cloud session headlessly.
 if [[ $SIGN_AAX -eq 1 ]]; then
   [[ -x "$WRAPTOOL" ]] || { echo "error: wraptool not found at $WRAPTOOL" >&2; exit 1; }
-  PASSWORD_ARGS=()
-  [[ -n "${PACE_PASSWORD:-}" ]] && PASSWORD_ARGS=(--password "$PACE_PASSWORD")
+  CLOUD_ARGS=()
+  if [[ -n "${PACE_PASSWORD:-}" ]]; then
+    # Headless mode: open the iLok Cloud session (iloktool ships with the
+    # iLok License Support installer and lands on PATH on macOS), then let
+    # wraptool use PACE's cloud signing service. Closed again by cleanup().
+    iloktool cloud --open --account "$PACE_ACCOUNT" --password "$PACE_PASSWORD" -v
+    CLOUD_SESSION=1
+    CLOUD_ARGS=(--allowsigningservice)
+  fi
   for aax in "$AAX_DIR"/*.aaxplugin; do
     echo "wraptool signing: $(basename "$aax")"
-    "$WRAPTOOL" sign --account "$PACE_ACCOUNT" "${PASSWORD_ARGS[@]}" \
+    "$WRAPTOOL" sign --account "$PACE_ACCOUNT" \
                 --wcguid "$PACE_WCGUID" --signid "$AAX_SIGNID" \
-                --in "$aax" --out "$aax"
+                --in "$aax" --out "$aax" \
+                ${CLOUD_ARGS[@]+"${CLOUD_ARGS[@]}"}
   done
 fi
 

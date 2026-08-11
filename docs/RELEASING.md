@@ -27,9 +27,15 @@ bundle after each build):
 
 - **Local / USB iLok**: run the script with a physical iLok connected (or an
   iLok Cloud session open in iLok License Manager) - no password needed.
-- **CI / PACE cloud signing**: export `PACE_PASSWORD` and the iLok Cloud
-  session opens headlessly. The password is only ever passed via the
-  environment, never argv.
+- **CI / PACE cloud signing** (per PACE's "Code Signing of AAX plug-ins
+  utilizing the iLok Cloud" guide): export `PACE_PASSWORD` and the script
+  opens the session itself - `iloktool cloud --open` - then signs with
+  `wraptool ... --allowsigningservice`, closing the session on exit. The
+  password only ever travels via the environment, never argv.
+
+PACE's constraints to know about: Mac AAX must be signed on a Mac (and
+Windows AAX on Windows), and an iLok Cloud session is per-machine - if you
+ever parallelise signing jobs, each runner needs its own iLok account.
 
 ## Cutting a release
 
@@ -42,8 +48,9 @@ bundle after each build):
 
 | Secret | Purpose |
 |---|---|
-| `PACE_TOOLS_URL` | fetchable copy of the PACE Eden tools (wraptool) installer |
-| `PACE_ACCOUNT` / `PACE_PASSWORD` | PACE Central account for cloud signing |
+| `PACE_TOOLS_URL` | fetchable copy of the PACE Code Signing for AAX SDK (wraptool) installer |
+| `ILOK_TOOLS_URL` | fetchable copy of the iLok License Support installer (iloktool) |
+| `PACE_ACCOUNT` / `PACE_PASSWORD` | iLok account with the Cloud-enabled PACE Tools license |
 | `PACE_WCGUID` | wrap configuration GUID for the suite |
 | `APPLE_CERT_P12_BASE64` / `APPLE_CERT_PASSWORD` | Developer ID Application + Installer certs (one .p12, base64) |
 | `APPLE_TEAM_ID` | Apple team id for codesign/productbuild identities |

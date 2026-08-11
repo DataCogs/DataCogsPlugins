@@ -31,8 +31,11 @@ jobs:
       fail-fast: true # abort the whole run as soon as any platform fails
       matrix:
         include:
-          - os: windows-latest
-            artifact: Windows
+          # Windows is parked until the macOS pipeline is proven end-to-end
+          # (the Windows leg has never been exercised; re-enable by
+          # uncommenting - the rest of the workflow already handles it).
+          # - os: windows-latest
+          #   artifact: Windows
           - os: macos-latest
             artifact: macOS
 
@@ -146,11 +149,15 @@ jobs:
             -s -k "$KEYCHAIN_PASSWORD" "$KEYCHAIN" > /dev/null
           rm certs.p12
 
-      - name: Install PACE Eden tools
+      - name: Install PACE signing SDK and iLok tools
         run: |
           set -euo pipefail
+          # Code Signing for AAX SDK (wraptool) + License Support (iloktool).
+          # Mac AAX must be signed on a Mac, hence this macOS job.
           curl -fsSL -o pace-tools.pkg "${{ secrets.PACE_TOOLS_URL }}"
           sudo installer -pkg pace-tools.pkg -target /
+          curl -fsSL -o ilok-tools.pkg "${{ secrets.ILOK_TOOLS_URL }}"
+          sudo installer -pkg ilok-tools.pkg -target /
 
       - name: PACE cloud-sign AAX bundles
         env:
