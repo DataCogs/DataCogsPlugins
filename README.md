@@ -111,6 +111,33 @@ Lessons worth copying:
 - **Support both dev and CI in one recipe.** Local builds sign the installed
   bundle post-build (`common/cmake/DataCogsAAX.cmake`); CI signs during packaging
   (`--sign-aax`). One wrap-config GUID covers the whole suite.
+- **wraptool signs AAX — nothing else.** The AU and VST3 bundles still need a
+  regular `codesign --options runtime --timestamp` with your Developer ID
+  Application cert before packaging, or notarization will reject the installer
+  for every unsigned binary in it.
+
+### Troubleshooting notarization
+
+- **`HTTP 401 Invalid credentials`** — the password must be an *app-specific
+  password* from account.apple.com (format `xxxx-xxxx-xxxx-xxxx`), and the
+  Apple ID must be the one that owns your team. Validate the exact trio
+  locally before burning a CI run:
+  ```sh
+  xcrun notarytool history --apple-id "you@example.com" \
+      --password "xxxx-xxxx-xxxx-xxxx" --team-id "TEAMID"
+  ```
+- **`status: Invalid`** — Apple rejected the archive's contents. The verdict
+  names every offending binary; fetch it with the submission id from the CI
+  log:
+  ```sh
+  xcrun notarytool log <submission-id> --apple-id "you@example.com" \
+      --password "xxxx-xxxx-xxxx-xxxx" --team-id "TEAMID"
+  ```
+  Typical findings: "binary is not signed" / "no secure timestamp" — some
+  binary missed the hardened-runtime Developer ID codesign (see above).
+- **Retry cheaply.** After fixing *secrets*, use the run's "Re-run failed
+  jobs" — it reuses the built artifacts and current secret values. Script or
+  workflow changes need a fresh tag: the tagged commit is what CI executes.
 
 ## Contributing
 

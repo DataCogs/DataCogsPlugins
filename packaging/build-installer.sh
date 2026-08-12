@@ -113,6 +113,19 @@ for entry in compressor:CompressorPlugin parametric-eq:ParametricEQPlugin convol
   fi
 done
 
+# Notarization requires every binary in the pkg to carry a Developer ID
+# signature with hardened runtime and a secure timestamp. wraptool covers
+# the AAX bundles; the AU and VST3 bundles arrive with only the build's
+# ad-hoc signature (mangled by the artifact zip round-trip anyway), so
+# they are codesigned properly here. Skipped for unsigned local builds.
+if [[ $SIGN_AAX -eq 1 || -n "$SIGN_ID" ]]; then
+  for bundle in "$AU_DIR"/*.component "$VST3_DIR"/*.vst3; do
+    echo "codesigning: $(basename "$bundle")"
+    codesign --force --options runtime --timestamp \
+             --sign "$AAX_SIGNID" "$bundle"
+  done
+fi
+
 # Sign the staged AAX bundles in place. With a USB iLok (or an open iLok
 # Cloud session) no password is needed; CI exports PACE_PASSWORD to open a
 # cloud session headlessly.
