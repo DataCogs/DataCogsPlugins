@@ -43,6 +43,11 @@ endif()
 # PACE signing for installed AAX bundles, shared by every plugin.
 include(${CMAKE_CURRENT_SOURCE_DIR}/common/cmake/DataCogsAAX.cmake)
 
+# Installing into the system plugin folders needs local admin rights; CI
+# turns this off (-DCOPY_PLUGIN_AFTER_BUILD=OFF). Declared once here so
+# every plugin honours the same switch.
+option(COPY_PLUGIN_AFTER_BUILD "Copy plugins into the system plugin folders after each build" ON)
+
 enable_testing()
 
 # Each plugin can be switched off to configure a partial build, e.g.

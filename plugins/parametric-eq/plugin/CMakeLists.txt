@@ -17,7 +17,7 @@ juce_add_plugin(${PROJECT_NAME}
     # PLUGIN_CODE / PLUGIN_MANUFACTURER_CODE stay fixed so existing sessions
     # keep resolving to this plugin across the rename.
     PRODUCT_NAME "DataCogs EQ"
-    COPY_PLUGIN_AFTER_BUILD TRUE
+    COPY_PLUGIN_AFTER_BUILD ${COPY_PLUGIN_AFTER_BUILD}
 )
 
 juce_generate_juce_header(${PROJECT_NAME})

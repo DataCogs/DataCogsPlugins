@@ -13,20 +13,32 @@ on:
     branches: [main]
     paths-ignore: ["**.md", "docs/**"]
 
+# A newer push to the same ref supersedes any in-flight run.
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: ${{ !startsWith(github.ref, 'refs/tags/') }}
+
 env:
   BUILD_TYPE: Release
   BUILD_DIR: build
+  # Universal binaries only where they ship (tag builds feeding the
+  # installer); PR/branch builds are arm64-only, halving compile work.
+  OSX_ARCHS: ${{ startsWith(github.ref, 'refs/tags/') && 'arm64;x86_64' || 'arm64' }}
 
 jobs:
   build_and_test:
     name: ${{ matrix.artifact }}
     runs-on: ${{ matrix.os }}
+    timeout-minutes: 90
     strategy:
-      fail-fast: false # show all errors for each platform (vs. cancel jobs on error)
+      fail-fast: true # abort the whole run as soon as any platform fails
       matrix:
         include:
-          - os: windows-latest
-            artifact: Windows
+          # Windows is parked until the macOS pipeline is proven end-to-end
+          # (the Windows leg has never been exercised; re-enable by
+          # uncommenting - the rest of the workflow already handles it).
+          # - os: windows-latest
+          #   artifact: Windows
           - os: macos-latest
             artifact: macOS
 
@@ -35,11 +47,14 @@ jobs:
         uses: lukka/get-cmake@latest
 
       - name: Checkout code
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
 
       - name: ccache
         if: runner.os != 'Windows'
-        uses: hendrikmuhs/ccache-action@v1
+        uses: hendrikmuhs/ccache-action@v1.2.23
+        env:
+          # runner images ship untrusted third-party taps; silence the noise
+          HOMEBREW_NO_REQUIRE_TAP_TRUST: "1"
         with:
           key: ${{ matrix.os }}
 
@@ -50,7 +65,7 @@ jobs:
           -DCMAKE_BUILD_TYPE=${{ env.BUILD_TYPE }}
           -DCOPY_PLUGIN_AFTER_BUILD=OFF
           -DCMAKE_C_COMPILER_LAUNCHER=ccache -DCMAKE_CXX_COMPILER_LAUNCHER=ccache
-          -DCMAKE_OSX_ARCHITECTURES="arm64;x86_64"
+          -DCMAKE_OSX_ARCHITECTURES="${{ env.OSX_ARCHS }}"
 
       - name: Build
         shell: bash
@@ -72,19 +87,20 @@ jobs:
           done
 
       - name: Upload artifacts
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: DataCogsPlugins-${{ matrix.artifact }}
           path: dist/*.zip
 
   # Tagged releases (vX.Y.Z): sign, package, notarize, publish - hands-free.
   #
-  # Required repository secrets:
-  #   PACE_TOOLS_URL          private URL of the PACE Eden tools installer
-  #                           (wraptool); download it from your PACE account
-  #                           and host it somewhere the runner can fetch
-  #   PACE_ACCOUNT            PACE Central account (cloud signing trial)
-  #   PACE_PASSWORD           its password (opens the iLok Cloud session)
+  # Required repository secrets (creation walkthrough: docs/CI-SETUP.md):
+  #   PACE_ACCOUNT            iLok account with the Cloud-enabled PACE Tools
+  #                           license (cloud signing trial)
+  #   PACE_PASSWORD           its password - used by iloktool to open the
+  #                           iLok Cloud session headlessly. One session per
+  #                           machine; concurrent signers need separate
+  #                           iLok accounts
   #   PACE_WCGUID             wrap config GUID (product: Data Cogs Plugins)
   #   APPLE_CERT_P12_BASE64   Developer ID Application + Installer certs,
   #                           exported as one .p12, base64-encoded
@@ -101,10 +117,10 @@ jobs:
 
     steps:
       - name: Checkout code
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
 
       - name: Download macOS build artifacts
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@v8
         with:
           name: DataCogsPlugins-macOS
           path: zips
@@ -137,48 +153,48 @@ jobs:
             -s -k "$KEYCHAIN_PASSWORD" "$KEYCHAIN" > /dev/null
           rm certs.p12
 
-      - name: Install PACE Eden tools
-        run: |
-          set -euo pipefail
-          curl -fsSL -o pace-tools.pkg "${{ secrets.PACE_TOOLS_URL }}"
-          sudo installer -pkg pace-tools.pkg -target /
-
-      - name: PACE cloud-sign AAX bundles
-        env:
-          PACE_ACCOUNT: ${{ secrets.PACE_ACCOUNT }}
-          PACE_PASSWORD: ${{ secrets.PACE_PASSWORD }}
-          PACE_WCGUID: ${{ secrets.PACE_WCGUID }}
-          APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
-        run: |
-          set -euo pipefail
-          WRAPTOOL="/Applications/PACEAntiPiracy/Eden/Fusion/Versions/6/bin/wraptool"
-          SIGN_ID="Developer ID Application: Mark Daunt (${APPLE_TEAM_ID})"
-          for aax in build/plugins/*/plugin/*_artefacts/AAX/*.aaxplugin; do
-            echo "signing: $aax"
-            "$WRAPTOOL" sign --account "$PACE_ACCOUNT" --password "$PACE_PASSWORD" \
-                        --wcguid "$PACE_WCGUID" --signid "$SIGN_ID" \
-                        --in "$aax" --out "$aax"
-          done
-
-      - name: Fetch IR library
-        uses: google-github-actions/auth@v2
+      - name: Authenticate to Google Cloud
+        uses: google-github-actions/auth@v3
         with:
           credentials_json: ${{ secrets.GCP_SA_KEY }}
-      - uses: google-github-actions/setup-gcloud@v2
-      - shell: bash
+      - uses: google-github-actions/setup-gcloud@v3
+
+      - name: Install PACE signing SDK
+        run: |
+          set -euo pipefail
+          # One pkg installs the whole stack: wraptool, License Service and
+          # iLok License Manager (which provides iloktool). Kept in the
+          # private bucket - PACE's installers are not ours to host publicly.
+          # Mac AAX must be signed on a Mac, hence this macOS job.
+          gcloud storage cp gs://datacogs-ir-library/ci-tools/PACECodeSigningForAAXSDKMac_v6.0.0.zip pace-sdk.zip
+          unzip -q pace-sdk.zip
+          MOUNT=$(hdiutil attach -nobrowse *.dmg | awk -F'\t' '/\/Volumes\//{print $NF}')
+          sudo installer -pkg "$MOUNT"/*.pkg -target /
+          hdiutil detach "$MOUNT" -quiet
+
+      - name: Fetch IR library
+        shell: bash
         run: |
           mkdir -p ir-library
           gcloud storage rsync --recursive gs://datacogs-ir-library/ir-library ir-library
 
-      - name: Build installer
+      - name: Sign AAX (PACE cloud) and build installer
         env:
           APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
+          PACE_ACCOUNT: ${{ secrets.PACE_ACCOUNT }}
+          PACE_PASSWORD: ${{ secrets.PACE_PASSWORD }}
+          PACE_WCGUID: ${{ secrets.PACE_WCGUID }}
         run: |
           set -euo pipefail
+          # --sign-aax wraptool-signs the staged bundles; PACE_PASSWORD in the
+          # environment opens the iLok Cloud session headlessly. The same
+          # script signs from a local USB iLok when run on a dev machine.
           ./packaging/build-installer.sh \
             --build-dir build \
             --ir-library ir-library \
             --version "${GITHUB_REF_NAME#v}" \
+            --sign-aax \
+            --aax-signid "Developer ID Application: Mark Daunt (${APPLE_TEAM_ID})" \
             --sign "Developer ID Installer: Mark Daunt (${APPLE_TEAM_ID})"
 
       - name: Notarize and staple
@@ -194,7 +210,7 @@ jobs:
           xcrun stapler staple "${PKG[0]}"
 
       - name: Upload installer
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: DataCogsPlugins-Installer-macOS
           path: dist/*.pkg
@@ -208,13 +224,13 @@ jobs:
 
     steps:
       - name: Download all artifacts
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@v8
         with:
           merge-multiple: true
           path: dist
 
       - name: Create release
-        uses: softprops/action-gh-release@v2
+        uses: softprops/action-gh-release@v3
         with:
           name: DataCogs Plugins ${{ github.ref_name }}
           draft: true
