@@ -1,14 +1,15 @@
 name: CI
 
-# The whole suite builds on every PR and every merge to main. This is
-# deliberate (rather than per-plugin path filtering): the plugins share
-# common/ and one JUCE checkout, so a change there must prove all three
-# plugins still build and pass their tests. Docs-only changes are skipped.
+# The whole suite builds and tests on every PR targeting main - that green
+# check is the merge gate (branch protection requires it, and requires the
+# PR to be up to date with main, so the PR tree IS the merge result; no
+# duplicate build on push). Whole-suite-not-per-plugin is deliberate: the
+# plugins share common/ and one JUCE checkout, so a change there must prove
+# all three still build and pass tests. Docs-only changes are skipped.
+# Tags (vX.Y.Z) run the full release pipeline.
 on:
   push:
-    branches: [main]
     tags: ["v*"]
-    paths-ignore: ["**.md", "docs/**"]
   pull_request:
     branches: [main]
     paths-ignore: ["**.md", "docs/**"]
