@@ -127,5 +127,9 @@ Anthropic's Claude for UI implementation, build/CI wiring, and documentation.
 
 ## License
 
-To be finalised before first release. The suite is built on JUCE, whose open-source
-terms (AGPLv3) constrain the choice; expect this repo to carry a GPL-family license.
+**GNU AGPLv3** — see [LICENSE](LICENSE). This matches the terms under which the
+suite uses [JUCE](https://juce.com)'s open-source license option. In short: use,
+study, modify and redistribute freely; if you distribute builds (or serve users
+over a network) from modified sources, those sources must be available under the
+same terms. The DataCogs name and gears logo identify this project's official
+builds and aren't covered by the code license.

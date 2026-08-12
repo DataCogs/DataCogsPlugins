@@ -7,11 +7,16 @@ The whole path from tag to notarized installer runs in CI.
 ## The flow
 
 ```
-push to dev  ->  PR / merge to main  ->  CI: build suite + all tests (macOS)
+push to dev  ->  PR to main  ->  CI: build suite + all tests (macOS)
+                                 = the merge gate; no duplicate build on push
 tag vX.Y.Z   ->  CI: build -> PACE cloud-sign AAX -> fetch IR library
                      -> productbuild suite installer -> notarize + staple
                      -> draft GitHub release with installer + per-plugin zips
 ```
+
+Branch protection (once the repo is public / on a paid plan) enforces the
+gate mechanically: the `macOS` check must pass and the PR must be up to date
+with main before merging - so the PR tree is exactly the merge result.
 
 - CI builds the **whole suite** on every merge (not per-plugin path filters):
   the plugins share `common/`, so a change there must prove all three still
@@ -87,6 +92,5 @@ system-wide search root; users' own libraries always shadow it).
 - Windows: builds are parked in CI until the macOS pipeline is proven
   end-to-end (re-enable the commented matrix leg in `.github/workflows/ci.yml`),
   then an Inno Setup installer to match the macOS pkg.
-- Final license decision (GPL-family expected, given JUCE's terms).
 - Redistribution review for the third-party IR collections + attribution
   notes for the AI-generated panel artwork.
