@@ -195,4 +195,8 @@ productbuild --distribution "$STAGE/distribution.xml" \
              "$FINAL"
 
 echo "Built: $FINAL ($(du -h "$FINAL" | cut -f1 | tr -d ' '))"
-[[ -z "$SIGN_ID" ]] && echo "note: unsigned - pass --sign for a distributable installer (then notarize)."
+# NB: plain `[[ -z ... ]] && echo` as the last statement would make the
+# script exit 1 whenever --sign IS provided. Ask me how I know.
+if [[ -z "$SIGN_ID" ]]; then
+  echo "note: unsigned - pass --sign for a distributable installer (then notarize)."
+fi
