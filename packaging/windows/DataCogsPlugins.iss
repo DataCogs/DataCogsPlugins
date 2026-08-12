@@ -9,7 +9,8 @@
 ;   RepoRoot  repo checkout root (for LICENSE)
 
 [Setup]
-AppId={{8E1B2A44-4E0C-4C93-9AF6-DataCogsPlug}}
+; Stable app identity for upgrades/uninstall - never change this GUID.
+AppId={{81CDD1A6-0423-41CD-8673-C0B27B059F58}}
 AppName=DataCogs Plugins
 AppVersion={#Version}
 AppPublisher=DataCogs
