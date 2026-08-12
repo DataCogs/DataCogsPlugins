@@ -7,8 +7,12 @@ It's also a working reference for **modern JUCE infrastructure without the Proju
 the whole suite is pure CMake, wired for professional-grade CI and hands-free releases —
 every merge builds all plugins and runs every test suite, and release packaging is fully
 automated, including AAX signing via PACE's cloud signing tools (showcased here on a
-trial licence). If you're setting up serious plugin release automation, this repo is
-meant to be copied from.
+trial licence). It grew out of real production pain: converting a plugin company's
+manual Projucer build-and-package workflow — four-plus hours per release — into an
+automated CMake pipeline, as a side project that ended up saving hours every release.
+The gotchas from that journey (and this one) are documented throughout this repo. If
+you're wrestling a manual Projucer flow into automated CI, this repo is meant to be
+copied from.
 
 ## Why this exists
 
@@ -25,6 +29,11 @@ transparent** at the same time:
 - **It's open to everyone.** Use the plugins in your sessions, read the code to learn how
   compressors and EQs actually work, fork it, or contribute back. The point is that good
   audio tools — and the knowledge inside them — shouldn't be gated.
+- **Transparency is a security property.** Audio plugins are native code you invite onto
+  your machine, and closed-source plugins ask you to trust an opaque binary produced by
+  an opaque process. Here you can audit not just the DSP but the exact pipeline that
+  compiled, signed and packaged the installer you download — the CI logs of every
+  release build are public.
 
 ## The plugins
 
@@ -153,6 +162,10 @@ results, new presets, documentation fixes, ports. Two ground rules:
 
 Developed by [DataCogs](https://datacogs.com), with AI assistance from
 Anthropic's Claude for UI implementation, build/CI wiring, and documentation.
+
+Thanks to Derek at [PACE](https://paceap.com) for supplying the 30-day cloud
+signing trial that made it possible to prove the AAX signing pipeline in
+public.
 
 ## License
 

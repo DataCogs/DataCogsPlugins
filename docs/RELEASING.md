@@ -89,10 +89,28 @@ Produces `dist/DataCogs Plugins-<version>.pkg` with two components: the
 plugins and the reverb's IR library (which the plugin finds via its
 system-wide search root; users' own libraries always shadow it).
 
-## Still to do
+To remove an installed suite: `sudo packaging/uninstall.sh` (add
+`--with-irs` to also remove the system IR library). Personal IR libraries
+and per-user plugin folders are never touched.
 
-- Windows: builds are parked in CI until the macOS pipeline is proven
-  end-to-end (re-enable the commented matrix leg in `.github/workflows/ci.yml`),
-  then an Inno Setup installer to match the macOS pkg.
+## Windows
+
+The Windows leg mirrors the macOS one: CI builds + tests on `windows-latest`,
+and tagged releases run `packaging/windows/build-installer.ps1`, which stages
+VST3 + AAX + the IR library and compiles `packaging/windows/DataCogsPlugins.iss`
+with Inno Setup (installer targets: `Common Files\VST3`,
+`Common Files\Avid\Audio\Plug-Ins`, `ProgramData\DataCogs\Impulse Responses`;
+Inno provides the uninstaller in Add/Remove Programs).
+
+AAX signing happens on Windows (PACE requires signing on the target OS): upload
+the PACE Code Signing SDK **Windows** installer to
+`gs://datacogs-ir-library/ci-tools/PACECodeSigningForAAXSDKWin.zip` and the
+release job installs it and cloud-signs the staged bundles; without it the
+installer ships unsigned AAX and warns loudly in the log.
+
+## Still to do
 - Redistribution review for the third-party IR collections + attribution
   notes for the AI-generated panel artwork.
+- Authenticode signing for the Windows installer + binaries (needs a Windows
+  code signing certificate; until then SmartScreen will warn on first run).
+- Upload the PACE Windows SDK to the bucket so Windows AAX gets cloud-signed.
