@@ -55,8 +55,10 @@ By default (`COPY_PLUGIN_AFTER_BUILD=ON`) each built format is installed into th
 system plugin folders. CI and packaging builds pass `-DCOPY_PLUGIN_AFTER_BUILD=OFF`.
 
 The release pipeline — CI, PACE cloud AAX signing, notarized suite installer —
-is documented in [docs/RELEASING.md](docs/RELEASING.md). Agent/contributor
-build rules live in [AGENTS.md](AGENTS.md).
+is documented in [docs/RELEASING.md](docs/RELEASING.md), with a from-scratch
+setup walkthrough (certificates, secrets, service accounts) in
+[docs/CI-SETUP.md](docs/CI-SETUP.md). Agent/contributor build rules live in
+[AGENTS.md](AGENTS.md).
 
 ### A note on AAX / Pro Tools
 
@@ -77,9 +79,9 @@ covering silent installs for CI).
 The flow, as implemented in [`packaging/build-installer.sh`](packaging/build-installer.sh)
 and [`.github/workflows/ci.yml`](.github/workflows/ci.yml):
 
-1. Install two packages on the runner: the **PACE Code Signing for AAX SDK**
-   (provides `wraptool`) and the **iLok License Support** installer (provides
-   `iloktool`).
+1. Install the **PACE Code Signing for AAX SDK** on the runner - the v6 pkg
+   installs `wraptool`, the License Service and iLok License Manager
+   (which provides `iloktool`) in one shot.
 2. Open the cloud session headlessly: `iloktool cloud --open --account … --password …`
 3. Sign with `wraptool sign … --allowsigningservice`
 4. **Close the session on exit** (`iloktool cloud --close`), success or failure —
@@ -92,10 +94,12 @@ Lessons worth copying:
   development machine's session. A CI-only account (holding just the PACE Tools
   license) also limits what a leaked credential exposes — ask PACE to deposit the
   license to a separate account for CI.
-- **Keep credentials out of argv where you control it.** The account password
-  travels only via environment variables into the scripts; secrets are exposed
-  solely to the tag-triggered release job, and GitHub never provides secrets to
-  fork PRs.
+- **Be precise about credential exposure.** The account password enters the
+  scripts only via environment variables — never as a script argument, never
+  logged. The one unavoidable argv exposure is `iloktool cloud --open
+  --password …`, PACE's documented interface, briefly visible in the process
+  list of the ephemeral runner. Secrets are exposed solely to the
+  tag-triggered release job, and GitHub never provides secrets to fork PRs.
 - **Sign on the matching OS.** Mac AAX must be signed on a Mac, Windows AAX on
   Windows — hence a macOS packaging job (a Windows one lands with the Windows
   installer).

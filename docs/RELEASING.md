@@ -7,7 +7,7 @@ The whole path from tag to notarized installer runs in CI.
 ## The flow
 
 ```
-push to dev  ->  PR / merge to main  ->  CI: build suite + all tests (macOS, Windows)
+push to dev  ->  PR / merge to main  ->  CI: build suite + all tests (macOS)
 tag vX.Y.Z   ->  CI: build -> PACE cloud-sign AAX -> fetch IR library
                      -> productbuild suite installer -> notarize + staple
                      -> draft GitHub release with installer + per-plugin zips
@@ -46,16 +46,26 @@ ever parallelise signing jobs, each runner needs its own iLok account.
 
 ## Required repository secrets
 
+Step-by-step instructions for creating every one of these — certificates,
+CSRs, app-specific passwords, the service account — live in
+[CI-SETUP.md](CI-SETUP.md).
+
 | Secret | Purpose |
 |---|---|
-| `PACE_TOOLS_URL` | fetchable copy of the PACE Code Signing for AAX SDK (wraptool) installer |
-| `ILOK_TOOLS_URL` | fetchable copy of the iLok License Support installer (iloktool) |
 | `PACE_ACCOUNT` / `PACE_PASSWORD` | iLok account with the Cloud-enabled PACE Tools license |
 | `PACE_WCGUID` | wrap configuration GUID for the suite |
 | `APPLE_CERT_P12_BASE64` / `APPLE_CERT_PASSWORD` | Developer ID Application + Installer certs (one .p12, base64) |
 | `APPLE_TEAM_ID` | Apple team id for codesign/productbuild identities |
 | `APPLE_NOTARY_APPLE_ID` / `APPLE_NOTARY_PASSWORD` | notarytool credentials |
 | `GCP_SA_KEY` | read access to the private IR library bucket |
+
+## CI tooling
+
+The PACE Code Signing for AAX SDK installer lives in the private bucket at
+`gs://datacogs-ir-library/ci-tools/` (PACE's installers aren't ours to host
+publicly). The v6 SDK pkg installs wraptool, the License Service and iLok
+License Manager (including `iloktool`) in one shot, so it's the only tool
+the release job needs beyond the runner image.
 
 ## Local installer build
 
@@ -71,7 +81,9 @@ system-wide search root; users' own libraries always shadow it).
 
 ## Still to do
 
-- Windows installer (Inno Setup) - Windows currently ships per-plugin zips.
+- Windows: builds are parked in CI until the macOS pipeline is proven
+  end-to-end (re-enable the commented matrix leg in `.github/workflows/ci.yml`),
+  then an Inno Setup installer to match the macOS pkg.
 - Final license decision (GPL-family expected, given JUCE's terms).
 - Redistribution review for the third-party IR collections + attribution
   notes for the AI-generated panel artwork.

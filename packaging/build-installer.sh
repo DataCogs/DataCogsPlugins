@@ -17,9 +17,14 @@
 #                  PACE_PASSWORD: the script opens an iLok Cloud session via
 #                  iloktool and signs with --allowsigningservice, per PACE's
 #                  "Code Signing of AAX plug-ins utilizing the iLok Cloud"
-#                  guide. Password comes ONLY from the environment, never
-#                  argv. Note: one cloud session per machine - concurrent
-#                  signers need separate iLok accounts.
+#                  guide. The password enters this script only via the
+#                  environment (never a script argument, never logged); it
+#                  is then passed to iloktool's --password flag - PACE's
+#                  documented interface - so it is briefly visible in the
+#                  process list of the (ephemeral) signing machine. If PACE
+#                  adds an env/stdin option, switch to it. Note: one cloud
+#                  session per machine - concurrent signers need separate
+#                  iLok accounts.
 #   (without it)   prefers the already-signed AAX installed in the Avid
 #                  folder by a local dev build, and warns if it has to fall
 #                  back to the unsigned build-tree copy.
