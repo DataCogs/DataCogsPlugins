@@ -37,9 +37,11 @@ bundle after each build):
   opens the session itself - `iloktool cloud --open` - then signs with
   `wraptool ... --allowsigningservice`, closing the session on exit. The
   password enters the scripts only via the environment (never a script
-  argument, never logged); the one argv exposure is `iloktool --password`,
-  PACE's documented interface, briefly visible in the ephemeral runner's
-  process list.
+  argument, never logged); it is passed on to `iloktool --password` and, in
+  cloud mode, `wraptool --password` - PACE's interfaces - briefly visible
+  in the ephemeral runner's process list. (PACE's guide shows wraptool
+  without a password once the session is open, but wraptool v6 demands one
+  when credentials aren't in the default keychain, as in CI.)
 
 PACE's constraints to know about: Mac AAX must be signed on a Mac (and
 Windows AAX on Windows), and an iLok Cloud session is per-machine - if you

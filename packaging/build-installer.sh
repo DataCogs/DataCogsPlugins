@@ -132,7 +132,11 @@ if [[ $SIGN_AAX -eq 1 ]]; then
     }
     iloktool cloud --open --account "$PACE_ACCOUNT" --password "$PACE_PASSWORD" -v
     CLOUD_SESSION=1
-    CLOUD_ARGS=(--allowsigningservice)
+    # PACE's guide shows wraptool without a password once the session is
+    # open, but wraptool v6 still demands one when the credentials aren't
+    # in the default keychain (CI uses a throwaway keychain for the Apple
+    # certs) - so pass it explicitly here too.
+    CLOUD_ARGS=(--allowsigningservice --password "$PACE_PASSWORD")
   fi
   for aax in "$AAX_DIR"/*.aaxplugin; do
     echo "wraptool signing: $(basename "$aax")"

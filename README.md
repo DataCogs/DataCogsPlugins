@@ -96,9 +96,11 @@ Lessons worth copying:
   license to a separate account for CI.
 - **Be precise about credential exposure.** The account password enters the
   scripts only via environment variables — never as a script argument, never
-  logged. The one unavoidable argv exposure is `iloktool cloud --open
-  --password …`, PACE's documented interface, briefly visible in the process
-  list of the ephemeral runner. Secrets are exposed solely to the
+  logged. It is passed as an argv flag only to PACE's own tools (`iloktool
+  cloud --open --password …` and, in cloud mode, `wraptool --password …` —
+  v6 demands it when credentials aren't in the default keychain, doc
+  examples notwithstanding), briefly visible in the ephemeral runner's
+  process list. Secrets are exposed solely to the
   tag-triggered release job, and GitHub never provides secrets to fork PRs.
 - **Sign on the matching OS.** Mac AAX must be signed on a Mac, Windows AAX on
   Windows — hence a macOS packaging job (a Windows one lands with the Windows
