@@ -13,6 +13,9 @@ on:
   pull_request:
     branches: [main]
     paths-ignore: ["**.md", "docs/**"]
+  # Manual run (Actions tab) - builds BOTH platforms, so the Windows leg
+  # can be exercised on demand without cutting a tag.
+  workflow_dispatch:
 
 # A newer push to the same ref supersedes any in-flight run.
 concurrency:
@@ -33,12 +36,9 @@ jobs:
     timeout-minutes: 90
     strategy:
       fail-fast: true # abort the whole run as soon as any platform fails
-      matrix:
-        include:
-          - os: windows-latest
-            artifact: Windows
-          - os: macos-latest
-            artifact: macOS
+      # PRs build macOS only (~9 min with warm cache); the slow Windows leg
+      # runs on tags (where the release needs it) and manual dispatches.
+      matrix: ${{ (startsWith(github.ref, 'refs/tags/') || github.event_name == 'workflow_dispatch') && fromJSON('{"include":[{"os":"windows-latest","artifact":"Windows"},{"os":"macos-latest","artifact":"macOS"}]') || fromJSON('{"include":[{"os":"macos-latest","artifact":"macOS"}]}') }}
 
     steps:
       - name: Get latest CMake
@@ -58,11 +58,16 @@ jobs:
 
       - name: Configure
         shell: bash
+        env:
+          # ccache only exists where its setup step ran (not Windows). The
+          # VS generator would ignore the launcher vars anyway, but keep
+          # the configuration honest for anyone switching to Ninja.
+          CCACHE_ARGS: ${{ runner.os != 'Windows' && '-DCMAKE_C_COMPILER_LAUNCHER=ccache -DCMAKE_CXX_COMPILER_LAUNCHER=ccache' || '' }}
         run: >
           cmake -S . -B ${{ env.BUILD_DIR }}
           -DCMAKE_BUILD_TYPE=${{ env.BUILD_TYPE }}
           -DCOPY_PLUGIN_AFTER_BUILD=OFF
-          -DCMAKE_C_COMPILER_LAUNCHER=ccache -DCMAKE_CXX_COMPILER_LAUNCHER=ccache
+          $CCACHE_ARGS
           -DCMAKE_OSX_ARCHITECTURES="${{ env.OSX_ARCHS }}"
 
       - name: Build
@@ -275,7 +280,11 @@ jobs:
           # see PACE's "Silent, unattended installs" documentation.
           $installer = Get-ChildItem pace-sdk -Recurse -Include *.exe,*.msi | Select-Object -First 1
           if (-not $installer) { Write-Error "no installer inside the SDK zip"; exit 1 }
-          Start-Process -Wait -FilePath $installer.FullName -ArgumentList "/quiet","/norestart"
+          if ($installer.Extension -eq ".msi") {
+            Start-Process -Wait -FilePath msiexec -ArgumentList "/i", $installer.FullName, "/qn", "/norestart"
+          } else {
+            Start-Process -Wait -FilePath $installer.FullName -ArgumentList "/quiet", "/norestart"
+          }
 
       - name: Install Inno Setup
         run: choco install innosetup -y --no-progress

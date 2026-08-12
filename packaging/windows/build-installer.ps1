@@ -31,6 +31,10 @@ foreach ($sub in "VST3", "AAX", "IR") {
     New-Item -ItemType Directory -Force -Path (Join-Path $Stage $sub) | Out-Null
 }
 
+# Everything from here runs inside try/finally so the staging directory is
+# cleaned up even when a step fails mid-way.
+try {
+
 $plugins = @(
     @{ dir = "compressor";        target = "CompressorPlugin" },
     @{ dir = "parametric-eq";     target = "ParametricEQPlugin" },
@@ -95,5 +99,8 @@ New-Item -ItemType Directory -Force -Path $OutDir | Out-Null
         (Join-Path $PSScriptRoot "DataCogsPlugins.iss")
 if ($LASTEXITCODE -ne 0) { Fail "ISCC failed" }
 
-Remove-Item -Recurse -Force $Stage
 Write-Host "Built: $OutDir\DataCogs Plugins-$Version.exe"
+
+} finally {
+    Remove-Item -Recurse -Force -ErrorAction SilentlyContinue $Stage
+}
