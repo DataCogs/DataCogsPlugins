@@ -89,6 +89,10 @@ Produces `dist/DataCogs Plugins-<version>.pkg` with two components: the
 plugins and the reverb's IR library (which the plugin finds via its
 system-wide search root; users' own libraries always shadow it).
 
+To remove an installed suite: `sudo packaging/uninstall.sh` (add
+`--with-irs` to also remove the system IR library). Personal IR libraries
+and per-user plugin folders are never touched.
+
 ## Still to do
 
 - Windows: builds are parked in CI until the macOS pipeline is proven
