@@ -121,8 +121,15 @@ if [[ $SIGN_AAX -eq 1 ]]; then
   CLOUD_ARGS=()
   if [[ -n "${PACE_PASSWORD:-}" ]]; then
     # Headless mode: open the iLok Cloud session (iloktool ships with the
-    # iLok License Support installer and lands on PATH on macOS), then let
-    # wraptool use PACE's cloud signing service. Closed again by cleanup().
+    # PACE Code Signing SDK / iLok License Support installers and lands on
+    # PATH on macOS), then let wraptool use PACE's cloud signing service.
+    # Closed again by cleanup().
+    command -v iloktool > /dev/null || {
+      echo "error: PACE_PASSWORD is set but iloktool is not on PATH -" \
+           "install the PACE Code Signing SDK (or unset PACE_PASSWORD to" \
+           "sign with a USB iLok / already-open cloud session)" >&2
+      exit 1
+    }
     iloktool cloud --open --account "$PACE_ACCOUNT" --password "$PACE_PASSWORD" -v
     CLOUD_SESSION=1
     CLOUD_ARGS=(--allowsigningservice)

@@ -2,8 +2,8 @@
 
 Everything the tag-triggered release job needs, and exactly how to create it.
 Done once per repo (or once per fork, if you're adapting this suite). When
-you're finished, `gh secret list` should show all nine secrets from the table
-in [RELEASING.md](RELEASING.md).
+you're finished, `gh secret list` should show every secret from the table
+in [RELEASING.md](RELEASING.md) — that table is the source of truth.
 
 Prerequisites: an Apple Developer Program membership, a PACE account with the
 Cloud-enabled PACE Tools license (see [PACE support](mailto:support@paceap.com)),
@@ -108,7 +108,7 @@ creating it, that's propagation lag — wait a few seconds and retry.)
 ## 5. Verify and rehearse
 
 ```sh
-gh secret list        # all nine present?
+gh secret list        # everything from the RELEASING.md table present?
 git tag v0.1.0 && git push origin v0.1.0
 ```
 

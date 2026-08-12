@@ -94,12 +94,13 @@ jobs:
 
   # Tagged releases (vX.Y.Z): sign, package, notarize, publish - hands-free.
   #
-  # Required repository secrets:
-  #   PACE_TOOLS_URL          private URL of the PACE Eden tools installer
-  #                           (wraptool); download it from your PACE account
-  #                           and host it somewhere the runner can fetch
-  #   PACE_ACCOUNT            PACE Central account (cloud signing trial)
-  #   PACE_PASSWORD           its password (opens the iLok Cloud session)
+  # Required repository secrets (creation walkthrough: docs/CI-SETUP.md):
+  #   PACE_ACCOUNT            iLok account with the Cloud-enabled PACE Tools
+  #                           license (cloud signing trial)
+  #   PACE_PASSWORD           its password - used by iloktool to open the
+  #                           iLok Cloud session headlessly. One session per
+  #                           machine; concurrent signers need separate
+  #                           iLok accounts
   #   PACE_WCGUID             wrap config GUID (product: Data Cogs Plugins)
   #   APPLE_CERT_P12_BASE64   Developer ID Application + Installer certs,
   #                           exported as one .p12, base64-encoded
@@ -152,39 +153,27 @@ jobs:
             -s -k "$KEYCHAIN_PASSWORD" "$KEYCHAIN" > /dev/null
           rm certs.p12
 
-      - name: Install PACE signing SDK and iLok tools
-        run: |
-          set -euo pipefail
-          # Code Signing for AAX SDK (wraptool) + License Support (iloktool).
-          # Mac AAX must be signed on a Mac, hence this macOS job.
-          curl -fsSL -o pace-tools.pkg "${{ secrets.PACE_TOOLS_URL }}"
-          sudo installer -pkg pace-tools.pkg -target /
-          curl -fsSL -o ilok-tools.pkg "${{ secrets.ILOK_TOOLS_URL }}"
-          sudo installer -pkg ilok-tools.pkg -target /
-
-      - name: PACE cloud-sign AAX bundles
-        env:
-          PACE_ACCOUNT: ${{ secrets.PACE_ACCOUNT }}
-          PACE_PASSWORD: ${{ secrets.PACE_PASSWORD }}
-          PACE_WCGUID: ${{ secrets.PACE_WCGUID }}
-          APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
-        run: |
-          set -euo pipefail
-          WRAPTOOL="/Applications/PACEAntiPiracy/Eden/Fusion/Versions/6/bin/wraptool"
-          SIGN_ID="Developer ID Application: Mark Daunt (${APPLE_TEAM_ID})"
-          for aax in build/plugins/*/plugin/*_artefacts/AAX/*.aaxplugin; do
-            echo "signing: $aax"
-            "$WRAPTOOL" sign --account "$PACE_ACCOUNT" --password "$PACE_PASSWORD" \
-                        --wcguid "$PACE_WCGUID" --signid "$SIGN_ID" \
-                        --in "$aax" --out "$aax"
-          done
-
-      - name: Fetch IR library
+      - name: Authenticate to Google Cloud
         uses: google-github-actions/auth@v3
         with:
           credentials_json: ${{ secrets.GCP_SA_KEY }}
       - uses: google-github-actions/setup-gcloud@v3
-      - shell: bash
+
+      - name: Install PACE signing SDK
+        run: |
+          set -euo pipefail
+          # One pkg installs the whole stack: wraptool, License Service and
+          # iLok License Manager (which provides iloktool). Kept in the
+          # private bucket - PACE's installers are not ours to host publicly.
+          # Mac AAX must be signed on a Mac, hence this macOS job.
+          gcloud storage cp gs://datacogs-ir-library/ci-tools/PACECodeSigningForAAXSDKMac_v6.0.0.zip pace-sdk.zip
+          unzip -q pace-sdk.zip
+          MOUNT=$(hdiutil attach -nobrowse *.dmg | awk -F'\t' '/\/Volumes\//{print $NF}')
+          sudo installer -pkg "$MOUNT"/*.pkg -target /
+          hdiutil detach "$MOUNT" -quiet
+
+      - name: Fetch IR library
+        shell: bash
         run: |
           mkdir -p ir-library
           gcloud storage rsync --recursive gs://datacogs-ir-library/ir-library ir-library

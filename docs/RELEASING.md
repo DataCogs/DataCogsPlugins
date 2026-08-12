@@ -31,7 +31,10 @@ bundle after each build):
   utilizing the iLok Cloud" guide): export `PACE_PASSWORD` and the script
   opens the session itself - `iloktool cloud --open` - then signs with
   `wraptool ... --allowsigningservice`, closing the session on exit. The
-  password only ever travels via the environment, never argv.
+  password enters the scripts only via the environment (never a script
+  argument, never logged); the one argv exposure is `iloktool --password`,
+  PACE's documented interface, briefly visible in the ephemeral runner's
+  process list.
 
 PACE's constraints to know about: Mac AAX must be signed on a Mac (and
 Windows AAX on Windows), and an iLok Cloud session is per-machine - if you
