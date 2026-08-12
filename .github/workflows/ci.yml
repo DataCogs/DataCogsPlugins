@@ -228,7 +228,11 @@ jobs:
   package_windows:
     if: startsWith(github.ref, 'refs/tags/v')
     runs-on: windows-latest
-    needs: build_and_test
+    # Serialized after package_macos deliberately: both jobs open an iLok
+    # Cloud session, and PACE allows one session per account at a time -
+    # concurrent signing would kick one runner's session mid-sign. Drop
+    # this once a second (dedicated) CI iLok account exists.
+    needs: [build_and_test, package_macos]
 
     steps:
       - name: Checkout code
@@ -276,14 +280,20 @@ jobs:
             exit 0
           }
           Expand-Archive pace-sdk-win.zip -DestinationPath pace-sdk
-          # PACE's Windows SDK ships an installer supporting silent install;
-          # see PACE's "Silent, unattended installs" documentation.
-          $installer = Get-ChildItem pace-sdk -Recurse -Include *.exe,*.msi | Select-Object -First 1
-          if (-not $installer) { Write-Error "no installer inside the SDK zip"; exit 1 }
-          if ($installer.Extension -eq ".msi") {
-            Start-Process -Wait -FilePath msiexec -ArgumentList "/i", $installer.FullName, "/qn", "/norestart"
-          } else {
-            Start-Process -Wait -FilePath $installer.FullName -ArgumentList "/quiet", "/norestart"
+          # The Windows SDK zip ships TWO installers: the Code Signing SDK
+          # (wraptool) at the root and redist/LicenseSupport.exe (iloktool).
+          # Install every installer found, shallowest first, silently - see
+          # PACE's "Silent, unattended installs" documentation.
+          $installers = Get-ChildItem pace-sdk -Recurse -Include *.exe,*.msi |
+                        Sort-Object { $_.FullName.Split([IO.Path]::DirectorySeparatorChar).Count }
+          if (-not $installers) { Write-Error "no installer inside the SDK zip"; exit 1 }
+          foreach ($installer in $installers) {
+            Write-Host "installing: $($installer.Name)"
+            if ($installer.Extension -eq ".msi") {
+              Start-Process -Wait -FilePath msiexec -ArgumentList "/i", $installer.FullName, "/qn", "/norestart"
+            } else {
+              Start-Process -Wait -FilePath $installer.FullName -ArgumentList "/quiet", "/norestart"
+            }
           }
 
       - name: Install Inno Setup
