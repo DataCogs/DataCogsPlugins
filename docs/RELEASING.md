@@ -47,6 +47,12 @@ PACE's constraints to know about: Mac AAX must be signed on a Mac (and
 Windows AAX on Windows), and an iLok Cloud session is per-machine - if you
 ever parallelise signing jobs, each runner needs its own iLok account.
 
+**Strict mode:** CI sets `REQUIRE_SIGNED=1` on both packaging steps, so a
+tag build hard-fails up front if anything needed for full signing is
+missing (wraptool, iloktool, credentials, keychain identities) - a release
+is fully signed on every format and platform, or it is not a release.
+Local builds without the variable keep the warn-and-continue behaviour.
+
 ## Cutting a release
 
 1. Merge `dev` -> `main` and let CI go green.
