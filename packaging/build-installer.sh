@@ -65,6 +65,21 @@ while [[ $# -gt 0 ]]; do
   esac
 done
 
+# REQUIRE_SIGNED=1 (set by CI on tag builds) makes any condition that would
+# yield an unsigned or partially-signed installer a hard failure UP FRONT,
+# before minutes of staging work: AAX signing must be requested, the
+# installer identity must be provided, and both Developer ID identities
+# must actually exist in the keychain.
+if [[ "${REQUIRE_SIGNED:-0}" == "1" ]]; then
+  [[ $SIGN_AAX -eq 1 ]] || { echo "error: REQUIRE_SIGNED but --sign-aax not passed" >&2; exit 1; }
+  [[ -n "$SIGN_ID" ]] || { echo "error: REQUIRE_SIGNED but no --sign installer identity" >&2; exit 1; }
+  [[ -x "$WRAPTOOL" ]] || { echo "error: REQUIRE_SIGNED but wraptool not found at $WRAPTOOL" >&2; exit 1; }
+  security find-identity -v 2>/dev/null | grep -qF "$AAX_SIGNID" \
+    || { echo "error: REQUIRE_SIGNED but codesign identity not in keychain: $AAX_SIGNID" >&2; exit 1; }
+  security find-identity -v 2>/dev/null | grep -qF "$SIGN_ID" \
+    || { echo "error: REQUIRE_SIGNED but installer identity not in keychain: $SIGN_ID" >&2; exit 1; }
+fi
+
 STAGE=$(mktemp -d)
 CLOUD_SESSION=0
 cleanup() {

@@ -187,6 +187,8 @@ jobs:
           PACE_ACCOUNT: ${{ secrets.PACE_ACCOUNT }}
           PACE_PASSWORD: ${{ secrets.PACE_PASSWORD }}
           PACE_WCGUID: ${{ secrets.PACE_WCGUID }}
+          # a release is fully signed or it is not a release
+          REQUIRE_SIGNED: "1"
         run: |
           set -euo pipefail
           # --sign-aax wraptool-signs the staged bundles; PACE_PASSWORD in the
@@ -305,6 +307,8 @@ jobs:
           PACE_ACCOUNT: ${{ secrets.PACE_ACCOUNT }}
           PACE_PASSWORD: ${{ secrets.PACE_PASSWORD }}
           PACE_WCGUID: ${{ secrets.PACE_WCGUID }}
+          # a release is fully signed or it is not a release
+          REQUIRE_SIGNED: "1"
         run: |
           $v = $env:GITHUB_REF_NAME -replace '^v', ''
           ./packaging/windows/build-installer.ps1 -Version $v -IrLibrary ir-library

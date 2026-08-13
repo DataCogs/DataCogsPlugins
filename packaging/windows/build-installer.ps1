@@ -61,17 +61,49 @@ Copy-Item (Join-Path $IrLibrary "*") -Destination (Join-Path $Stage "IR") -Recur
 Remove-Item -Force -ErrorAction SilentlyContinue (Join-Path $Stage "IR\favourites.txt")
 
 # ---- PACE cloud-sign the staged AAX (when the tools are here) ---------------
-$Wraptool = if ($env:WRAPTOOL) { $env:WRAPTOOL }
-            else { "C:\Program Files\PACEAntiPiracy\Eden\Fusion\Versions\6\wraptool.exe" }
-$Iloktool = if ($env:ILOKTOOL) { $env:ILOKTOOL }
-            else { "C:\Program Files (x86)\iLok License Manager\iloktool.exe" }
+# Tool locations vary between PACE SDK versions - search rather than guess,
+# and say exactly what's missing so CI logs are actionable.
+function Find-Tool([string]$override, [string]$name, [string[]]$roots) {
+    if ($override) { return $override }
+    foreach ($root in $roots) {
+        $hit = Get-ChildItem -Path $root -Recurse -Filter $name -ErrorAction SilentlyContinue |
+               Select-Object -First 1
+        if ($hit) { return $hit.FullName }
+    }
+    return $null
+}
+
+$Wraptool = Find-Tool $env:WRAPTOOL "wraptool.exe" @(
+    "C:\Program Files\PACEAntiPiracy", "C:\Program Files (x86)\PACEAntiPiracy")
+$Iloktool = Find-Tool $env:ILOKTOOL "iloktool.exe" @(
+    "C:\Program Files (x86)\iLok License Manager", "C:\Program Files\iLok License Manager",
+    "C:\Program Files\PACEAntiPiracy", "C:\Program Files (x86)\PACEAntiPiracy")
 $PaceAccount = if ($env:PACE_ACCOUNT) { $env:PACE_ACCOUNT } else { "kogzee" }
 $PaceWcguid  = if ($env:PACE_WCGUID)  { $env:PACE_WCGUID }
                else { "FCB93630-951E-11F1-9B0E-00505692AD3E" }
 
+# REQUIRE_SIGNED=1 (set by CI on tag builds): shipping unsigned AAX is a
+# hard failure, not a warning. Local/dev builds without it keep the
+# warn-and-continue behaviour.
+$RequireSigned = $env:REQUIRE_SIGNED -eq "1"
+
+$missing = @()
+if (-not $Wraptool) {
+    $missing += "wraptool.exe (PACE Code Signing SDK)"
+    Write-Warning "wraptool.exe not found under PACEAntiPiracy - dumping what IS installed:"
+    Get-ChildItem "C:\Program Files*\PACEAntiPiracy" -Recurse -Depth 3 -ErrorAction SilentlyContinue |
+        Select-Object -ExpandProperty FullName | Write-Host
+}
+if (-not $Iloktool) { $missing += "iloktool.exe (iLok License Support)" }
+if (-not $env:PACE_PASSWORD) { $missing += "PACE_PASSWORD environment variable" }
+
 $cloudSession = $false
-if ((Test-Path $Wraptool) -and $env:PACE_PASSWORD) {
-    if (-not (Test-Path $Iloktool)) { Fail "wraptool found but iloktool missing at $Iloktool" }
+if ($missing.Count -gt 0 -and $RequireSigned) {
+    Fail "REQUIRE_SIGNED is set but AAX signing is impossible - missing: $($missing -join '; ')"
+}
+
+if ($Wraptool -and $env:PACE_PASSWORD) {
+    if (-not $Iloktool) { Fail "wraptool found but iloktool.exe not found - is License Support installed?" }
     try {
         & $Iloktool cloud --open --account $PaceAccount --password $env:PACE_PASSWORD -v
         if ($LASTEXITCODE -ne 0) { Fail "iloktool cloud --open failed" }
