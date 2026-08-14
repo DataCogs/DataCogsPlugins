@@ -68,7 +68,9 @@ CSRs, app-specific passwords, the service account — live in
 
 | Secret | Purpose |
 |---|---|
-| `PACE_ACCOUNT` / `PACE_PASSWORD` | iLok account with the Cloud-enabled PACE Tools license |
+| `PACE_ACCOUNT` / `PACE_PASSWORD` | dedicated CI iLok account (`datacogs`) with the Cloud-enabled PACE Tools license |
+| `AZURE_TENANT_ID` / `AZURE_CLIENT_ID` / `AZURE_CLIENT_SECRET` | service principal for Azure Artifact Signing (Authenticode) |
+| `AZURE_SIGNING_ENDPOINT` / `AZURE_SIGNING_ACCOUNT` / `AZURE_SIGNING_PROFILE` | Artifact Signing endpoint URL, account and certificate profile |
 | `PACE_WCGUID` | wrap configuration GUID for the suite |
 | `APPLE_CERT_P12_BASE64` / `APPLE_CERT_PASSWORD` | Developer ID Application + Installer certs (one .p12, base64) |
 | `APPLE_TEAM_ID` | Apple team id for codesign/productbuild identities |
@@ -113,6 +115,22 @@ the PACE Code Signing SDK **Windows** installer to
 `gs://datacogs-ir-library/ci-tools/PACECodeSigningForAAXSDKWin.zip` and the
 release job installs it and cloud-signs the staged bundles; without it the
 installer ships unsigned AAX and warns loudly in the log.
+
+## Cloud signing sunset (September 2026)
+
+The PACE cloud signing trial (dedicated CI account `datacogs`) expires
+**1 September 2026** with no extension available. After that date:
+
+- Tagged CI runs still build, test, notarize and package everything except
+  the PACE layer of the AAX bundles.
+- AAX signing moves to the **local mode** the scripts already support: run
+  `packaging/build-installer.sh --sign-aax` (macOS) and
+  `packaging/windows/build-installer.ps1` (Windows) on machines with a
+  local iLok, then attach the installers to the release with
+  `gh release upload`.
+- The cloud-signing code stays in the repo, working and documented, as the
+  reference implementation it was built to be - anyone with their own PACE
+  cloud signing arrangement can switch it back on by setting the secrets.
 
 ## Still to do
 - Redistribution review for the third-party IR collections + attribution
