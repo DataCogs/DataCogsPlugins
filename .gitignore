@@ -6,6 +6,10 @@ Builds/
 dist/
 plugins/convolution-reverb/scripts/prompts.json
 
+# Generated at packaging time (Azure Artifact Signing config + wrapper temp)
+packaging/windows/metadata.json
+packaging/windows/wraptool-args.tmp
+
 # CPM-managed dependencies (downloaded at configure time)
 libs/
 

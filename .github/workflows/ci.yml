@@ -312,12 +312,36 @@ jobs:
       - name: Install Inno Setup
         run: choco install innosetup -y --no-progress
 
+      # Current signtool + the Artifact Signing dlib, per PACE's "Azure
+      # Digital Signing" tutorial (the SDK-bundled signtool predates
+      # Artifact Signing support; everything must be x64; .NET 8 is
+      # preinstalled on the runner).
+      - name: Install Authenticode signing tools
+        if: env.HAS_AZURE_SIGNING == 'true'
+        shell: pwsh
+        run: |
+          nuget install Microsoft.Windows.SDK.BuildTools -x -OutputDirectory signing-tools
+          nuget install Microsoft.ArtifactSigning.Client -x -OutputDirectory signing-tools
+          $st = Get-ChildItem signing-tools -Recurse -Filter signtool.exe |
+                Where-Object { $_.FullName -match '\\x64\\' } | Select-Object -First 1
+          $dlib = Get-ChildItem signing-tools -Recurse -Filter Azure.CodeSigning.Dlib.dll |
+                  Where-Object { $_.FullName -match '\\x64\\' } | Select-Object -First 1
+          if (-not $st -or -not $dlib) { Write-Error "signtool or dlib not found after NuGet install"; exit 1 }
+          "SIGNTOOL_PATH=$($st.FullName)" >> $env:GITHUB_ENV
+          "ACS_DLIB=$($dlib.FullName)" >> $env:GITHUB_ENV
+
       - name: Build installer (signs AAX when PACE tools present)
         shell: pwsh
         env:
           PACE_ACCOUNT: ${{ secrets.PACE_ACCOUNT }}
           PACE_PASSWORD: ${{ secrets.PACE_PASSWORD }}
           PACE_WCGUID: ${{ secrets.PACE_WCGUID }}
+          AZURE_TENANT_ID: ${{ secrets.AZURE_TENANT_ID }}
+          AZURE_CLIENT_ID: ${{ secrets.AZURE_CLIENT_ID }}
+          AZURE_CLIENT_SECRET: ${{ secrets.AZURE_CLIENT_SECRET }}
+          AZURE_SIGNING_ENDPOINT: ${{ secrets.AZURE_SIGNING_ENDPOINT }}
+          AZURE_SIGNING_ACCOUNT: ${{ secrets.AZURE_SIGNING_ACCOUNT }}
+          AZURE_SIGNING_PROFILE: ${{ secrets.AZURE_SIGNING_PROFILE }}
           # a release is fully signed or it is not a release
           REQUIRE_SIGNED: "1"
         run: |
