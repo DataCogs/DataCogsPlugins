@@ -105,7 +105,68 @@ rm key.json
 (If the IAM binding says the service account "does not exist" seconds after
 creating it, that's propagation lag — wait a few seconds and retry.)
 
-## 5. Verify and rehearse
+## 5. Azure Artifact Signing (Windows Authenticode)
+
+Windows code signing uses **Azure Artifact Signing** (also known as Trusted
+Signing): a fully managed service (~US$10/month, Basic tier, 5,000
+signatures/month) where the private key lives in Azure and is
+non-exportable — no PFX files to protect, no USB token. CI authenticates as
+a service principal, which is exempt from Azure's user MFA enforcement (an
+unattended workload can't do MFA; that's what workload identities are for).
+
+Setup, in order — start early, because step 2 involves a human review:
+
+1. **Create the signing account**: Azure portal → create a *Trusted Signing
+   account* (ours: name `datacogs`, region West US 2, Basic tier). The
+   region fixes your endpoint URL — West US 2 is
+   `https://wus2.codesigning.azure.net`.
+2. **Identity validation** (the slow step — allow days): in the account,
+   open *Identity validations* → New Identity → **Public** (Public applies
+   to Public Trust certificate profiles, which is what publicly
+   distributed software needs; Private is for enterprise-internal trust
+   only). Choose *Organization* to put the company name on signatures
+   (requires a registered legal entity — registration details, matching
+   address and phone) or *Individual* (faster, your personal name on
+   signatures).
+3. **Certificate profile**: once validation completes, create a profile of
+   type **Public Trust** bound to the validated identity. Its name becomes
+   a secret below.
+4. **Service principal**: create an app registration with a client secret
+   (`az ad sp create-for-rbac` or portal), then grant it the
+   **Trusted Signing Certificate Profile Signer** role on the signing
+   account.
+5. **Set the secrets**:
+
+```sh
+gh secret set AZURE_TENANT_ID          # from the app registration
+gh secret set AZURE_CLIENT_ID
+gh secret set AZURE_CLIENT_SECRET
+gh secret set AZURE_SIGNING_ENDPOINT   # e.g. https://wus2.codesigning.azure.net
+gh secret set AZURE_SIGNING_ACCOUNT    # e.g. datacogs
+gh secret set AZURE_SIGNING_PROFILE    # the certificate profile name
+```
+
+The workflow's signing step (azure/artifact-signing-action) activates
+automatically once the secrets exist — it signs the Windows installer exe
+after the Inno build, with an RFC 3161 timestamp so signatures outlive the
+certificate.
+
+Two notes:
+
+- **Hardening option**: the action also supports OIDC federated
+  credentials (GitHub's runner authenticates to Azure directly - no stored
+  client secret at all). Worth switching to once the pipeline is stable.
+- **AAX integration**: wraptool applies the Authenticode layer through a
+  signtool wrapper (`packaging/windows/aax-signtool.bat`), following PACE's
+  "Azure Digital Signing" tutorial
+  (https://docs.paceap.com/fusion-protection/tutorials/azure-digital-signing):
+  CI installs a current signtool + the Artifact Signing dlib via NuGet,
+  the packaging script writes `metadata.json` from the secrets, and
+  wraptool is invoked with `--signtool <wrapper> --signid placeholder`
+  (the placeholder is required but unused). Requires .NET 8 exactly and
+  x64 for both signtool and the dlib - mismatches fail cryptically.
+
+## 6. Verify and rehearse
 
 ```sh
 gh secret list        # everything from the RELEASING.md table present?

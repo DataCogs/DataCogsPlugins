@@ -87,6 +87,24 @@ $PaceWcguid  = if ($env:PACE_WCGUID)  { $env:PACE_WCGUID }
 # warn-and-continue behaviour.
 $RequireSigned = $env:REQUIRE_SIGNED -eq "1"
 
+# Authenticode via Azure Artifact Signing: the wrap config mandates a
+# platform digital signature, applied through a signtool wrapper per
+# PACE's "Azure Digital Signing" tutorial. Requires SIGNTOOL_PATH and
+# ACS_DLIB (set by CI after the NuGet installs) plus the AZURE_* env.
+$AzureReady = $env:SIGNTOOL_PATH -and $env:ACS_DLIB -and $env:AZURE_CLIENT_ID -and
+              $env:AZURE_SIGNING_ENDPOINT -and $env:AZURE_SIGNING_ACCOUNT -and $env:AZURE_SIGNING_PROFILE
+if ($AzureReady) {
+    # metadata.json tells signtool which account/profile signs; excluding
+    # AzureCliCredential stops a stray az session shadowing our app creds.
+    $env:ACS_JSON = Join-Path $PSScriptRoot "metadata.json"
+    @{
+        Endpoint               = $env:AZURE_SIGNING_ENDPOINT
+        CodeSigningAccountName = $env:AZURE_SIGNING_ACCOUNT
+        CertificateProfileName = $env:AZURE_SIGNING_PROFILE
+        ExcludeCredentials     = @("AzureCliCredential")
+    } | ConvertTo-Json | Set-Content -Path $env:ACS_JSON -Encoding ascii
+}
+
 $missing = @()
 if (-not $Wraptool) {
     $missing += "wraptool.exe (PACE Code Signing SDK)"
@@ -96,6 +114,7 @@ if (-not $Wraptool) {
 }
 if (-not $Iloktool) { $missing += "iloktool.exe (iLok License Support)" }
 if (-not $env:PACE_PASSWORD) { $missing += "PACE_PASSWORD environment variable" }
+if (-not $AzureReady) { $missing += "Azure Artifact Signing setup (SIGNTOOL_PATH, ACS_DLIB, AZURE_* env)" }
 
 $cloudSession = $false
 if ($missing.Count -gt 0 -and $RequireSigned) {
@@ -108,10 +127,19 @@ if ($Wraptool -and $env:PACE_PASSWORD) {
         & $Iloktool cloud --open --account $PaceAccount --password $env:PACE_PASSWORD -v
         if ($LASTEXITCODE -ne 0) { Fail "iloktool cloud --open failed" }
         $cloudSession = $true
+        # --signtool points wraptool at our Azure wrapper; --signid is a
+        # required-but-ignored placeholder when a wrapper builds the real
+        # signtool command line (per PACE's Azure Digital Signing tutorial).
+        $signtoolArgs = @()
+        if ($AzureReady) {
+            $signtoolArgs = @("--signtool", (Join-Path $PSScriptRoot "aax-signtool.bat"),
+                              "--signid", "placeholder")
+        }
         Get-ChildItem -Path (Join-Path $Stage "AAX") -Filter "*.aaxplugin" | ForEach-Object {
             Write-Host "wraptool signing: $($_.Name)"
             & $Wraptool sign --account $PaceAccount --password $env:PACE_PASSWORD `
-                --wcguid $PaceWcguid --in $_.FullName --out $_.FullName --allowsigningservice
+                --wcguid $PaceWcguid --in $_.FullName --out $_.FullName --allowsigningservice `
+                @signtoolArgs
             if ($LASTEXITCODE -ne 0) { Fail "wraptool failed on $($_.Name)" }
         }
     } finally {

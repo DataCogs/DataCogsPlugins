@@ -419,10 +419,15 @@ void ConvolutionReverbAudioProcessor::processBlock (juce::AudioBuffer<float>& bu
     // A linear crossfade would dip ~3 dB at 50%.
     mixSmoothed.setTargetValue (mixParameter->load() * 0.01f);
 
+    // Makeup for the engine's IR normalisation (see wetMakeupGain). All
+    // wet-path stages are linear, so applying it at the mix is equivalent
+    // to applying it anywhere upstream.
+    const float makeup = wetMakeupGain.load (std::memory_order_relaxed);
+
     for (int i = 0; i < numSamples; ++i)
     {
         const float m = mixSmoothed.getNextValue();
-        const float wetGain = std::sin (m * juce::MathConstants<float>::halfPi);
+        const float wetGain = makeup * std::sin (m * juce::MathConstants<float>::halfPi);
         const float dryGain = std::cos (m * juce::MathConstants<float>::halfPi);
 
         for (int ch = 0; ch < numChannels; ++ch)
@@ -580,6 +585,14 @@ void ConvolutionReverbAudioProcessor::rebuildAndLoadIr()
                                                   : juce::dsp::Convolution::Trim::no,
                                      masterIrNormalise ? juce::dsp::Convolution::Normalise::yes
                                                        : juce::dsp::Convolution::Normalise::no);
+
+    // Normalise::yes leaves the IR at a total energy of 0.125^2 (see the
+    // header comment on wetMakeupGain); x8 brings it back to unit energy so
+    // the wet path plays at dry loudness. Kept as makeup here - rather than
+    // Normalise::no plus our own scaling - because the engine normalises
+    // AFTER its internal resampling, so the level stays right across Size
+    // changes and session/file rate mismatches.
+    wetMakeupGain.store (masterIrNormalise ? 8.0f : 1.0f, std::memory_order_relaxed);
 }
 
 //==============================================================================

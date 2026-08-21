@@ -36,14 +36,9 @@ jobs:
     timeout-minutes: 90
     strategy:
       fail-fast: true # abort the whole run as soon as any platform fails
-      # Windows is parked while the AAX Authenticode question is resolved
-      # with PACE (see docs/RELEASING.md). To restore, swap the matrix line
-      # below for the commented conditional one (Windows on tags/dispatch):
-      # matrix: ${{ (startsWith(github.ref, 'refs/tags/') || github.event_name == 'workflow_dispatch') && fromJSON('{"include":[{"os":"windows-latest","artifact":"Windows"},{"os":"macos-latest","artifact":"macOS"}]}') || fromJSON('{"include":[{"os":"macos-latest","artifact":"macOS"}]}') }}
-      matrix:
-        include:
-          - os: macos-latest
-            artifact: macOS
+      # PRs build macOS only (~9 min with warm cache); the slow Windows leg
+      # runs on tags (where the release needs it) and manual dispatches.
+      matrix: ${{ (startsWith(github.ref, 'refs/tags/') || github.event_name == 'workflow_dispatch') && fromJSON('{"include":[{"os":"windows-latest","artifact":"Windows"},{"os":"macos-latest","artifact":"macOS"}]}') || fromJSON('{"include":[{"os":"macos-latest","artifact":"macOS"}]}') }}
 
     steps:
       - name: Get latest CMake
@@ -235,7 +230,7 @@ jobs:
   package_windows:
     # Parked with the Windows build leg (AAX Authenticode pending with
     # PACE); restore by reverting this to startsWith(github.ref, 'refs/tags/v')
-    if: false
+    if: startsWith(github.ref, 'refs/tags/v')
     runs-on: windows-latest
     # Serialized after package_macos deliberately: both jobs open an iLok
     # Cloud session on the SAME dedicated CI account (datacogs), and PACE
@@ -312,12 +307,36 @@ jobs:
       - name: Install Inno Setup
         run: choco install innosetup -y --no-progress
 
+      # Current signtool + the Artifact Signing dlib, per PACE's "Azure
+      # Digital Signing" tutorial (the SDK-bundled signtool predates
+      # Artifact Signing support; everything must be x64; .NET 8 is
+      # preinstalled on the runner).
+      - name: Install Authenticode signing tools
+        if: env.HAS_AZURE_SIGNING == 'true'
+        shell: pwsh
+        run: |
+          nuget install Microsoft.Windows.SDK.BuildTools -x -OutputDirectory signing-tools
+          nuget install Microsoft.ArtifactSigning.Client -x -OutputDirectory signing-tools
+          $st = Get-ChildItem signing-tools -Recurse -Filter signtool.exe |
+                Where-Object { $_.FullName -match '\\x64\\' } | Select-Object -First 1
+          $dlib = Get-ChildItem signing-tools -Recurse -Filter Azure.CodeSigning.Dlib.dll |
+                  Where-Object { $_.FullName -match '\\x64\\' } | Select-Object -First 1
+          if (-not $st -or -not $dlib) { Write-Error "signtool or dlib not found after NuGet install"; exit 1 }
+          "SIGNTOOL_PATH=$($st.FullName)" >> $env:GITHUB_ENV
+          "ACS_DLIB=$($dlib.FullName)" >> $env:GITHUB_ENV
+
       - name: Build installer (signs AAX when PACE tools present)
         shell: pwsh
         env:
           PACE_ACCOUNT: ${{ secrets.PACE_ACCOUNT }}
           PACE_PASSWORD: ${{ secrets.PACE_PASSWORD }}
           PACE_WCGUID: ${{ secrets.PACE_WCGUID }}
+          AZURE_TENANT_ID: ${{ secrets.AZURE_TENANT_ID }}
+          AZURE_CLIENT_ID: ${{ secrets.AZURE_CLIENT_ID }}
+          AZURE_CLIENT_SECRET: ${{ secrets.AZURE_CLIENT_SECRET }}
+          AZURE_SIGNING_ENDPOINT: ${{ secrets.AZURE_SIGNING_ENDPOINT }}
+          AZURE_SIGNING_ACCOUNT: ${{ secrets.AZURE_SIGNING_ACCOUNT }}
+          AZURE_SIGNING_PROFILE: ${{ secrets.AZURE_SIGNING_PROFILE }}
           # a release is fully signed or it is not a release
           REQUIRE_SIGNED: "1"
         run: |
@@ -351,8 +370,7 @@ jobs:
   release:
     if: startsWith(github.ref, 'refs/tags/v')
     runs-on: ubuntu-latest
-    # package_windows re-joins needs when Windows is unparked
-    needs: [build_and_test, package_macos]
+    needs: [build_and_test, package_macos, package_windows]
     permissions:
       contents: write
 
