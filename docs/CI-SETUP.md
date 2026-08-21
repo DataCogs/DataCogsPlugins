@@ -5,9 +5,29 @@ Done once per repo (or once per fork, if you're adapting this suite). When
 you're finished, `gh secret list` should show every secret from the table
 in [RELEASING.md](RELEASING.md) — that table is the source of truth.
 
-Prerequisites: an Apple Developer Program membership, a PACE account with the
-Cloud-enabled PACE Tools license (see [PACE support](mailto:support@paceap.com)),
-a private GCS bucket, and the `gh` and `gcloud` CLIs authenticated locally.
+## 0. Memberships and programs you need first
+
+None of the signing below works without these relationships in place, and
+some take days or weeks to approve — start them before anything else:
+
+- **Apple Developer Program** (US$99/year) — required for Developer ID
+  certificates and notarization. Without it, macOS builds load only on
+  machines with Gatekeeper disabled.
+- **Avid developer registration** (free) — gives access to the AAX SDK (JUCE 8
+  bundles it, but you still need the agreement) and to the **Pro Tools
+  Developer build**, which is the only Pro Tools that loads *unsigned* AAX.
+  Essential for testing AAX locally before signing is set up.
+- **PACE signing tools via Avid** — retail Pro Tools only loads PACE-signed
+  AAX. Request the PACE Tools license through the Avid developer portal as an
+  approved AAX developer: it's free that way (list price about US$500) and is
+  activated to a physical iLok USB. PACE's *cloud* signing — what CI uses here,
+  no hardware — is a separate product at about US$1,000 per year (prices at time of
+  writing); we ran it on a trial. Budget for it only if you want hands-free
+  signing on runners; the free USB license covers local signing fully.
+- **Azure subscription** — for Artifact Signing (~US$10/month); the Windows
+  Authenticode layer PACE's wrap configuration requires.
+- A private GCS bucket (or equivalent) for the IR library and the PACE
+  installers, plus the `gh`, `gcloud` and `az` CLIs authenticated locally.
 
 Throughout: `gh secret set NAME` prompts for the value on stdin, so
 credentials never land in your shell history.
@@ -114,28 +134,51 @@ non-exportable — no PFX files to protect, no USB token. CI authenticates as
 a service principal, which is exempt from Azure's user MFA enforcement (an
 unattended workload can't do MFA; that's what workload identities are for).
 
-Setup, in order — start early, because step 2 involves a human review:
+Setup, in order — the exact path we took. Portal for the human-review
+steps, `az` CLI for everything scriptable (install with `brew install
+azure-cli`, sign in with `az login --use-device-code`). Start early: step 2
+is a human review that took about a week for us.
 
-1. **Create the signing account**: Azure portal → create a *Trusted Signing
-   account* (ours: name `datacogs`, region West US 2, Basic tier). The
-   region fixes your endpoint URL — West US 2 is
-   `https://wus2.codesigning.azure.net`.
-2. **Identity validation** (the slow step — allow days): in the account,
-   open *Identity validations* → New Identity → **Public** (Public applies
-   to Public Trust certificate profiles, which is what publicly
-   distributed software needs; Private is for enterprise-internal trust
-   only). Choose *Organization* to put the company name on signatures
-   (requires a registered legal entity — registration details, matching
-   address and phone) or *Individual* (faster, your personal name on
-   signatures).
-3. **Certificate profile**: once validation completes, create a profile of
-   type **Public Trust** bound to the validated identity. Its name becomes
-   a secret below.
-4. **Service principal**: create an app registration with a client secret
-   (`az ad sp create-for-rbac` or portal), then grant it the
-   **Trusted Signing Certificate Profile Signer** role on the signing
-   account.
-5. **Set the secrets**:
+1. **Create the signing account** (portal): create an *Artifact Signing
+   account* (older screens say Trusted Signing) — ours: name `datacogs`,
+   resource group `datacogs_rg`, region West US 2, Basic tier. The region
+   fixes the endpoint URL: West US 2 is `https://wus2.codesigning.azure.net`.
+2. **Identity validation** (portal — the slow step): first grant your own
+   user the **Artifact Signing Identity Verifier** role on the account
+   (Access control (IAM)), then Objects → Identity validations → New
+   Identity → **Public** (Public feeds Public Trust profiles — publicly
+   distributed software; Private is enterprise-internal only) → **Organization**
+   (company name on signatures; needs a registered entity and a business
+   identifier such as an ABN/DUNS, with matching address and phone) or
+   **Individual** (faster; your name on signatures).
+3. **Certificate profile** (portal, after validation): Objects →
+   Certificate profiles → Create → type **Public Trust**, *Program type:
+   None* (the "Windows endpoint security platform" option is for
+   antimalware vendors), select the validated identity as CN and O, name
+   it — ours is `datacogs-public-trust`. The CLI extension can list
+   profiles but cannot look up validation IDs, so this stays a portal step:
+   `az extension add --name trustedsigning` then
+   `az trustedsigning certificate-profile list -g datacogs_rg --account-name datacogs`.
+4. **App registration** (portal): Microsoft Entra ID → App registrations →
+   New registration (single tenant; ours is `codesigning-app`) →
+   Certificates & secrets → New client secret → copy the **Value**
+   immediately (not the Secret ID — that's just a record identifier and
+   will fail authentication). The IDs are readable later with
+   `az ad app list --display-name codesigning-app` and
+   `az account show --query tenantId`.
+5. **Role assignment** (CLI) — grant the app the signing role, scoped to
+   the account only:
+
+```sh
+APP=$(az ad app list --display-name codesigning-app --query "[0].appId" -o tsv)
+SCOPE=$(az resource show -g datacogs_rg -n datacogs \
+    --resource-type Microsoft.CodeSigning/codeSigningAccounts --query id -o tsv)
+az role assignment create --assignee "$APP" \
+    --role "Artifact Signing Certificate Profile Signer" --scope "$SCOPE"
+az role assignment list --scope "$SCOPE" -o table   # verify
+```
+
+6. **Set the secrets**:
 
 ```sh
 gh secret set AZURE_TENANT_ID          # from the app registration

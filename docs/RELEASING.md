@@ -9,14 +9,19 @@ The whole path from tag to notarized installer runs in CI.
 ```
 push to dev  ->  PR to main  ->  CI: build suite + all tests (macOS)
                                  = the merge gate; no duplicate build on push
-tag vX.Y.Z   ->  CI: build -> PACE cloud-sign AAX -> fetch IR library
-                     -> productbuild suite installer -> notarize + staple
-                     -> draft GitHub release with installer + per-plugin zips
+tag vX.Y.Z   ->  CI: build + test on macOS AND Windows, then:
+                 macOS:   PACE cloud-sign AAX -> codesign AU/VST3 -> fetch IR library
+                          -> productbuild installer -> notarize + staple
+                 Windows: (serialized after macOS - one iLok session per account)
+                          PACE cloud-sign AAX with Authenticode via Azure wrapper
+                          -> fetch IR library -> Inno Setup installer
+                          -> Authenticode-sign the installer (Azure)
+                 -> draft GitHub release: pkg + exe + per-plugin zips
 ```
 
-Branch protection (once the repo is public / on a paid plan) enforces the
-gate mechanically: the `macOS` check must pass and the PR must be up to date
-with main before merging - so the PR tree is exactly the merge result.
+Branch protection enforces the gate mechanically, admins included: the
+`macOS` check must pass and the PR must be up to date with main before
+merging - so the PR tree is exactly the merge result.
 
 - CI builds the **whole suite** on every PR (not per-plugin path filters):
   the plugins share `common/`, so a change there must prove all three still
@@ -110,11 +115,16 @@ with Inno Setup (installer targets: `Common Files\VST3`,
 `Common Files\Avid\Audio\Plug-Ins`, `ProgramData\DataCogs\Impulse Responses`;
 Inno provides the uninstaller in Add/Remove Programs).
 
-AAX signing happens on Windows (PACE requires signing on the target OS): upload
-the PACE Code Signing SDK **Windows** installer to
-`gs://datacogs-ir-library/ci-tools/PACECodeSigningForAAXSDKWin.zip` and the
-release job installs it and cloud-signs the staged bundles; without it the
-installer ships unsigned AAX and warns loudly in the log.
+AAX signing happens on Windows (PACE requires signing on the target OS). The
+release job installs the PACE Code Signing SDK from
+`gs://datacogs-ir-library/ci-tools/PACECodeSigningForAAXSDKWin.zip` (the zip
+ships two installers - the SDK and License Support for `iloktool` - both
+installed silently), NuGet-installs a current `signtool.exe` plus the Azure
+Artifact Signing dlib, and wraptool applies the Authenticode layer through
+`packaging/windows/aax-signtool.bat` per PACE's Azure Digital Signing
+tutorial. The installer exe is then Authenticode-signed via
+`azure/artifact-signing-action`. Under `REQUIRE_SIGNED=1` any missing piece
+fails the job - unsigned AAX never ships.
 
 ## Cloud signing sunset (September 2026)
 
@@ -130,11 +140,17 @@ The PACE cloud signing trial (dedicated CI account `datacogs`) expires
   `gh release upload`.
 - The cloud-signing code stays in the repo, working and documented, as the
   reference implementation it was built to be - anyone with their own PACE
-  cloud signing arrangement can switch it back on by setting the secrets.
+  cloud signing arrangement (about US$1,000 per year at time of writing) can switch it
+  back on by setting the secrets. Local signing uses the PACE Tools USB
+  license that approved AAX developers get free via the Avid developer portal,
+  so the sustainable zero-cost path is local signing with CI doing everything
+  else.
 
 ## Still to do
+
 - Redistribution review for the third-party IR collections + attribution
   notes for the AI-generated panel artwork.
-- Authenticode signing for the Windows installer + binaries (needs a Windows
-  code signing certificate; until then SmartScreen will warn on first run).
-- Upload the PACE Windows SDK to the bucket so Windows AAX gets cloud-signed.
+- Switch the Azure service principal from a client secret to OIDC federated
+  credentials (no stored secret).
+- Windows compiler caching (ccache/sccache with the Ninja generator) to cut
+  the ~55-minute cold build on tag runs.
