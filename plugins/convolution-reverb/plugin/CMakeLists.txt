@@ -1,6 +1,6 @@
 cmake_minimum_required(VERSION 3.22)
 
-project(ConvolutionReverbPlugin VERSION 0.1.0)
+project(ConvolutionReverbPlugin VERSION 1.0.0)
 
 juce_add_plugin(${PROJECT_NAME}
     COMPANY_NAME "DataCogs"
