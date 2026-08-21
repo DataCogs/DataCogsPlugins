@@ -711,6 +711,103 @@ TEST_CASE ("Switching IR files changes the rendered response")
 }
 
 //==============================================================================
+TEST_CASE ("Normalised IR plays the wet path at unity loudness")
+{
+    juce::ScopedJuceInitialiser_GUI juceInit;
+    ConvolutionReverbAudioProcessor proc;
+
+    // Regression for "every IR sounds quiet and alike": JUCE's
+    // Normalise::yes scales each IR to a total energy of 0.125^2, which put
+    // the whole wet path ~18 dB under the dry signal until the wet-path
+    // makeup gain compensated it back to unit energy. For decorrelated
+    // noise-like input, steady-state wet RMS ~= input RMS * sqrt(IR energy),
+    // so at 100% mix the output must sit near the input level.
+    const auto fixture = juce::File::getCurrentWorkingDirectory()
+                             .getChildFile ("fixtures")
+                             .getChildFile ("Lady Chapel St Albans.wav");
+
+    juce::AudioFormatManager formatManager;
+    formatManager.registerBasicFormats();
+    std::unique_ptr<juce::AudioFormatReader> reader (formatManager.createReaderFor (fixture));
+    REQUIRE (reader != nullptr);
+    const double fileRate = reader->sampleRate;
+    const int fileLen = static_cast<int> (reader->lengthInSamples);
+    juce::AudioBuffer<float> h (static_cast<int> (reader->numChannels), fileLen);
+    REQUIRE (reader->read (&h, 0, fileLen, 0, true, true));
+    std::vector<float> fileSamples (static_cast<size_t> (fileLen) + 9600, 0.0f);
+    for (int i = 0; i < fileLen; ++i)
+        fileSamples[static_cast<size_t> (i)] = h.getSample (0, i);
+
+    setParam (proc, "mix", 100.0f);
+    // At the file's own rate the engine skips resampling; normalisation
+    // happens either way, so this only removes an unrelated variable.
+    proc.prepareToPlay (fileRate, kBlockSize);
+    REQUIRE (proc.loadImpulseResponseFile (fixture)); // the normalising path
+
+    juce::MidiBuffer midi;
+
+    // Wait out the async engine swap: the Dirac render must correlate with
+    // this room's own samples (scale-invariant, trim-tolerant).
+    const int renderLen = static_cast<int> (fileRate);
+    const int totalBlocks = renderLen / kBlockSize + 1;
+    std::vector<float> out;
+    const bool converged = retryUntil ([&]
+    {
+        proc.reset();
+        out.clear();
+        out.reserve (static_cast<size_t> (totalBlocks * kBlockSize));
+        for (int b = 0; b < totalBlocks; ++b)
+        {
+            juce::AudioBuffer<float> buffer (2, kBlockSize);
+            buffer.clear();
+            if (b == 0)
+            {
+                buffer.setSample (0, 0, 1.0f);
+                buffer.setSample (1, 0, 1.0f);
+            }
+            proc.processBlock (buffer, midi);
+            for (int i = 0; i < kBlockSize; ++i)
+                out.push_back (buffer.getSample (0, i));
+        }
+        return peakCrossCorrelation (out, fileSamples,
+                                     juce::jmin (fileLen - 9600, renderLen / 2), 9600) > 0.9;
+    });
+    REQUIRE (converged);
+
+    // 3 s of deterministic noise; compare output vs input power over the
+    // final second, well past the reverb's build-up.
+    juce::Random rng (42);
+    const int noiseBlocks = static_cast<int> (3.0 * fileRate) / kBlockSize;
+    double outSum = 0.0, inSum = 0.0;
+    proc.reset();
+    for (int b = 0; b < noiseBlocks; ++b)
+    {
+        juce::AudioBuffer<float> buffer (2, kBlockSize);
+        for (int ch = 0; ch < 2; ++ch)
+            for (int i = 0; i < kBlockSize; ++i)
+                buffer.setSample (ch, i, rng.nextFloat() * 2.0f - 1.0f);
+        juce::AudioBuffer<float> input;
+        input.makeCopyOf (buffer);
+        proc.processBlock (buffer, midi);
+        if (b > 2 * noiseBlocks / 3)
+            for (int ch = 0; ch < 2; ++ch)
+                for (int i = 0; i < kBlockSize; ++i)
+                {
+                    outSum += static_cast<double> (buffer.getSample (ch, i)) * buffer.getSample (ch, i);
+                    inSum  += static_cast<double> (input.getSample (ch, i)) * input.getSample (ch, i);
+                }
+    }
+
+    const double wetDb = 10.0 * std::log10 (outSum / inSum);
+    INFO ("steady-state wet level vs dry input: " << wetDb << " dB");
+    // Unit IR energy is the target; the band allows for trim, the split of
+    // energy between channels and finite-window statistics - while staying
+    // far above the -18 dB failure this test locks out.
+    REQUIRE (wetDb > -4.0);
+    REQUIRE (wetDb < 2.0);
+}
+
+//==============================================================================
 TEST_CASE ("Bypass passes audio through untouched")
 {
     juce::ScopedJuceInitialiser_GUI juceInit;

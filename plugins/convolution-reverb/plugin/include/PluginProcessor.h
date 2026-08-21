@@ -212,6 +212,15 @@ private:
     // getTailLengthSeconds (any thread) - hence atomic.
     std::atomic<double> irLengthSeconds { 0.0 };
 
+    // Wet-path makeup for the engine's loudness normalisation, applied in
+    // the mix stage. Convolution::Normalise::yes scales the IR to a total
+    // energy of 0.125^2 (an internal headroom constant), which would leave
+    // the wet path ~18 dB under the dry signal; x8 restores unit IR energy
+    // so wet loudness matches dry at 100% mix. 1.0 for unnormalised loads
+    // (the buffer/test path, where sample-exact output is the point).
+    // Written on the message thread per IR load, read in processBlock.
+    std::atomic<float> wetMakeupGain { 1.0f };
+
     // Message-thread-only bookkeeping for the editor and saved state.
     juce::File irFile;
     juce::String irName { "Built-in Hall" };

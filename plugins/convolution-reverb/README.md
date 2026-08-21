@@ -94,7 +94,10 @@ Nested folders become the dropdown's display names (`EchoThief/Venues/…`).
    beyond the first two are ignored for now); up to 30 s.
 2. Reopen the plugin editor (the list is rescanned when the editor opens).
 
-Loudness is normalised on load, silence is trimmed, and the file is
+Loudness is normalised on load to unit IR energy (so at 100% Mix the
+reverb plays at the dry signal's loudness — the engine's own
+normalisation lands 18 dB lower and is compensated by a wet-path makeup
+gain), silence is trimmed, and the file is
 resampled to the session rate automatically — a phone recording of a
 stairwell clap works, though a proper sine-sweep deconvolution sounds
 better. The full path of the chosen IR is saved in the session; if the
