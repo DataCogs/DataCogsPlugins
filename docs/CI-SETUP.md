@@ -13,7 +13,7 @@ some take days or weeks to approve — start them before anything else:
 - **Apple Developer Program** (US$99/year) — required for Developer ID
   certificates and notarization. Without it, macOS builds load only on
   machines with Gatekeeper disabled.
-- **Avid developer registration** (free) — gives access to the AAX SDK (JUCE 8
+- **Avid developer registration** (free) — gives access to the AAX SDK (JUCE
   bundles it, but you still need the agreement) and to the **Pro Tools
   Developer build**, which is the only Pro Tools that loads *unsigned* AAX.
   Essential for testing AAX locally before signing is set up.
