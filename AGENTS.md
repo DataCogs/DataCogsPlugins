@@ -1,6 +1,6 @@
 # Agent / contributor guide
 
-JUCE 8 audio plugin suite (AU / VST3 / AAX / Standalone), pure CMake, C++20.
+JUCE 9 audio plugin suite (AU / VST3 / AAX / Standalone), pure CMake, C++20.
 Three plugins — Compressor, Parametric EQ, Convolution Reverb — sharing one
 house UI. Each plugin's README documents its DSP design; read it before
 touching that plugin's DSP.

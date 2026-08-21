@@ -1,6 +1,6 @@
 # DataCogs Plugins
 
-A suite of audio plugins (AU / VST3 / AAX / Standalone) built with [JUCE 8](https://juce.com) —
+A suite of audio plugins (AU / VST3 / AAX / Standalone) built with [JUCE 9](https://juce.com) —
 free, open source, and written to be read.
 
 It's also a working reference for **modern JUCE infrastructure without the Projucer**:
@@ -58,7 +58,7 @@ faceplate labels — implemented once in [`common/`](common/) and reused by ever
 
 ## Building
 
-Requires CMake 3.22+ and a C++20 compiler. Dependencies (JUCE 8, Catch2) are fetched
+Requires CMake 3.22+ and a C++20 compiler. Dependencies (JUCE 9, Catch2) are fetched
 automatically via CPM on first configure.
 
 ```sh
@@ -86,7 +86,7 @@ Building is free; *shipping* signed plugins needs four relationships, and the
 approvals take time — start them first (details in [docs/CI-SETUP.md](docs/CI-SETUP.md)):
 
 - **Apple Developer Program** (US$99/yr) — Developer ID certificates and notarization.
-- **Avid developer registration** (free) — the AAX SDK agreement (JUCE 8 bundles the
+- **Avid developer registration** (free) — the AAX SDK agreement (JUCE bundles the
   SDK itself) and the **Pro Tools Developer build**, the only Pro Tools that loads
   *unsigned* AAX. That's how you test AAX locally before signing exists.
 - **PACE signing tools** — retail Pro Tools loads only PACE-signed AAX. The standard

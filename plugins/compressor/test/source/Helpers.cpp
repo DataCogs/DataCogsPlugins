@@ -124,15 +124,21 @@ void Helpers::writeBufferToWavFile(juce::AudioBuffer<float> *buffer, juce::Strin
         return;
     }
 
-    std::unique_ptr<juce::FileOutputStream> outStream(outputFile.createOutputStream());
+    std::unique_ptr<juce::OutputStream> outStream = outputFile.createOutputStream();
     if (!outStream)
     {
         std::cerr << "Error creating file output stream for: " << path.toStdString() << std::endl;
         return;
     }
 
+    // JUCE 9: createWriterFor takes an AudioFormatWriterOptions and moves the
+    // stream into the writer, which flushes and closes it on destruction.
     juce::WavAudioFormat format;
-    auto writer = format.createWriterFor(outStream.get(), 44100, buffer->getNumChannels(), 32, {}, 0);
+    auto writer = format.createWriterFor (outStream,
+                                          juce::AudioFormatWriterOptions{}
+                                              .withSampleRate (44100.0)
+                                              .withNumChannels (buffer->getNumChannels())
+                                              .withBitsPerSample (32));
 
     if (!writer)
     {
@@ -140,11 +146,7 @@ void Helpers::writeBufferToWavFile(juce::AudioBuffer<float> *buffer, juce::Strin
         return;
     }
 
-    // Write from audio sample buffer to the writer
     writer->writeFromAudioSampleBuffer(*buffer, 0, buffer->getNumSamples());
-
-    // Flush the stream after writing
-    outStream->flush();
 
     std::cout << "Wrote buffer to file: " << path.toStdString() << std::endl;
 }
