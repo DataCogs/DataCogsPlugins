@@ -169,7 +169,7 @@ jobs:
           # iLok License Manager (which provides iloktool). Kept in the
           # private bucket - PACE's installers are not ours to host publicly.
           # Mac AAX must be signed on a Mac, hence this macOS job.
-          gcloud storage cp gs://datacogs-ir-library/ci-tools/PACECodeSigningForAAXSDKMac_v6.0.0.zip pace-sdk.zip
+          gcloud storage cp gs://datacogs-ir-library/ci-tools/PACECodeSigningForAAXSDKMac_v6.0.1.zip pace-sdk.zip
           unzip -q pace-sdk.zip
           MOUNT=$(hdiutil attach -nobrowse *.dmg | awk -F'\t' '/\/Volumes\//{print $NF}')
           sudo installer -pkg "$MOUNT"/*.pkg -target /
@@ -223,7 +223,7 @@ jobs:
   # Windows counterpart of package_macos. Windows AAX must be signed ON
   # Windows (PACE rule) - upload the PACE Code Signing SDK *Windows*
   # installer to gs://datacogs-ir-library/ci-tools/ as
-  # PACECodeSigningForAAXSDKWin.zip to enable cloud signing here; until
+  # PACECodeSigningForAAXSDKWin_v6.0.1.zip to enable cloud signing here; until
   # then the installer ships unsigned AAX and the log says so loudly.
   # (Authenticode-signing the installer itself needs a Windows code
   # signing cert - future work, tracked in docs/RELEASING.md.)
@@ -281,7 +281,7 @@ jobs:
       - name: Install PACE signing SDK (if uploaded)
         shell: pwsh
         run: |
-          $sdk = "gs://datacogs-ir-library/ci-tools/PACECodeSigningForAAXSDKWin.zip"
+          $sdk = "gs://datacogs-ir-library/ci-tools/PACECodeSigningForAAXSDKWin_v6.0.1.zip"
           gcloud storage cp $sdk pace-sdk-win.zip
           if ($LASTEXITCODE -ne 0) {
             Write-Warning "PACE Windows SDK not in the bucket - AAX will ship unsigned"

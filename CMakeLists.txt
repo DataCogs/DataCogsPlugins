@@ -33,7 +33,7 @@ CPMAddPackage(
   SOURCE_DIR ${LIB_DIR}/catch2
 )
 
-# AAX (Pro Tools): JUCE 8 bundles the AAX SDK, so this is only for pinning
+# AAX (Pro Tools): JUCE bundles the AAX SDK, so this is only for pinning
 # a specific external SDK version if one is present.
 set(AAX_SDK_PATH "$ENV{HOME}/SDKs/aax-sdk-2-9-0" CACHE PATH "Path to the Avid AAX SDK")
 if(EXISTS ${AAX_SDK_PATH})

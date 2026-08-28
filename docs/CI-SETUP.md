@@ -49,7 +49,7 @@ Then upload the **PACE Code Signing for AAX SDK** installer (from PACE Central)
 to your private bucket — PACE's installers are not yours to host publicly:
 
 ```sh
-gcloud storage cp PACECodeSigningForAAXSDKMac_v6.0.0.zip \
+gcloud storage cp PACECodeSigningForAAXSDKMac_v6.0.1.zip \
     gs://YOUR-BUCKET/ci-tools/
 ```
 

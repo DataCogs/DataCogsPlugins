@@ -1,6 +1,6 @@
 # Parametric EQ
 
-A DataCogs audio plugin (AU / VST3 / Standalone) built with JUCE 8. Six-band
+A DataCogs audio plugin (AU / VST3 / Standalone) built with JUCE. Six-band
 parametric EQ with a post-EQ spectrum analyzer and a draggable response
 curve — the third leg of the mixing tripod alongside the DataCogs
 Compressor and Convolution Reverb.
@@ -60,7 +60,7 @@ cd build && ctest --output-on-failure
 auval -v aufx DCeq DCog          # AU end-to-end validation
 ```
 
-First configure downloads JUCE 8.0.14 and Catch2 into `libs/` via CPM.
+First configure downloads JUCE and Catch2 into `libs/` via CPM.
 
 Ableton note: after replacing binaries, fully quit Live and Option-click
 Rescan; wrench icon opens the custom editor.

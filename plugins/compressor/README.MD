@@ -39,7 +39,7 @@ Useful A/B material for hearing what the design choices do:
 - CMake 3.22+
 - A C++20 toolchain (Xcode command-line tools on macOS, MSVC on Windows)
 
-No manual dependency installation is needed: the first CMake configure downloads CPM.cmake, JUCE 8.0.14 and Catch2 3.4.0 into `libs/`.
+No manual dependency installation is needed: the first CMake configure downloads CPM.cmake, JUCE and Catch2 into `libs/`.
 
 ## Build
 
