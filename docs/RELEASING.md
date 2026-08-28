@@ -117,7 +117,7 @@ Inno provides the uninstaller in Add/Remove Programs).
 
 AAX signing happens on Windows (PACE requires signing on the target OS). The
 release job installs the PACE Code Signing SDK from
-`gs://datacogs-ir-library/ci-tools/PACECodeSigningForAAXSDKWin.zip` (the zip
+`gs://datacogs-ir-library/ci-tools/PACECodeSigningForAAXSDKWin_v6.0.1.zip` (the zip
 ships two installers - the SDK and License Support for `iloktool` - both
 installed silently), NuGet-installs a current `signtool.exe` plus the Azure
 Artifact Signing dlib, and wraptool applies the Authenticode layer through
