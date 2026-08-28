@@ -1,6 +1,6 @@
 cmake_minimum_required(VERSION 3.22)
 
-project(CompressorPlugin VERSION 1.0.0)
+project(CompressorPlugin VERSION 1.0.1)
 
 # find_package(JUCE CONFIG REQUIRED)
 
