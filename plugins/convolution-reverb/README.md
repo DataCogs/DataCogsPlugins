@@ -1,6 +1,6 @@
 # Convolution Reverb
 
-A DataCogs audio plugin (AU / VST3 / Standalone) built with JUCE 8. Convolves
+A DataCogs audio plugin (AU / VST3 / Standalone) built with JUCE. Convolves
 the input with a measured or synthetic room impulse response using
 `juce::dsp::Convolution` (non-uniform partitioned FFT, zero latency,
 background IR loading and resampling).
@@ -172,7 +172,7 @@ cd build && ctest --output-on-failure
 auval -v aufx Cvrb DCog          # AU end-to-end validation
 ```
 
-First configure downloads JUCE 8.0.14 and Catch2 into `libs/` via CPM.
+First configure downloads JUCE and Catch2 into `libs/` via CPM.
 
 Ableton note: after replacing binaries, fully quit Live and Option-click
 Rescan; use the wrench icon to open the custom editor, the unfold arrow for
